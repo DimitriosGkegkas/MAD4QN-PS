@@ -67,34 +67,61 @@ class DuelingDDQNAgent():
         self.q_next.load_checkpoint()
 
     def learn(self):
+        # Check if there are enough experiences in memory to sample a batch for training
         if self.memory.mem_cntr < self.batch_size:
-            return
+            return  # Exit if not enough samples
 
+        # Reset the gradients of the optimizer to zero
         self.q_eval.optimizer.zero_grad()
 
+        # Update target network parameters periodically
+        # self.learn_step_counter % self.replace_target_cnt == 0 where replace_target_cnt == replace hyperparameter
         self.replace_target_network()
 
+        # Sample a batch of transitions (state, action, reward, next state, done flag) from memory
         states, actions, rewards, states_, dones = self.sample_memory()
-        
+
+        # Generate a range of indices for batch processing
         indices = np.arange(self.batch_size)
-     
+
+        # Compute the value (V_s) and advantage (A_s) streams from the main Q-network for the current states 
         V_s, A_s = self.q_eval.forward(states)
+        
+        # Compute the value (V_s_) and advantage (A_s_) streams from the target Q-network for the next states
         V_s_, A_s_ = self.q_next.forward(states_)
 
+        # Compute the value (V_s_eval) and advantage (A_s_eval) streams from the main Q-network for the current states (used for action selection)
         V_s_eval, A_s_eval = self.q_eval.forward(states)
 
+        # Calculate the predicted Q-values for the actions taken (current Q-values) using dueling architecture
         q_pred = T.add(V_s, (A_s - A_s.mean(dim=1, keepdim=True)))[indices, actions]
+
+        # Calculate the target Q-values (next Q-values) for the next states using the target network
+        # Apply the dueling architecture, adjusting for mean advantage, and avoid max across actions for stability
         q_next = T.add(V_s_, (A_s_ - A_s_.mean(dim=1, keepdim=True)))
+
+        # Calculate the Q-values of the current states for selecting max actions using the main Q-network
         q_eval = T.add(V_s_eval, (A_s_eval - A_s_eval.mean(dim=1, keepdim=True)))
 
+        # Determine the actions with the highest Q-values from the main Q-network for the Double DQN update
         max_actions = T.argmax(q_eval, dim=1)
 
+        # Zero out Q-values for terminal states to ensure no future reward is accumulated after episode end
         q_next[dones] = 0.0
-        q_target = rewards + self.gamma*q_next[indices, max_actions]
 
+        # Calculate the target Q-values for each action (using Double DQN formula)
+        q_target = rewards + self.gamma * q_next[indices, max_actions]
+
+        # Calculate the loss between the target and predicted Q-values
         loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
+
+        # Backpropagate the loss to update the network weights
         loss.backward()
         self.q_eval.optimizer.step()
+
+        # Increment the learning step counter
         self.learn_step_counter += 1
 
+        # Gradually reduce epsilon to decrease the exploration rate over time
         self.decrement_epsilon()
+
