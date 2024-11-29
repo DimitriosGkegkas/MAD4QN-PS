@@ -186,9 +186,9 @@ def make_env(env_name, agent_specs, scenario_path, headless, seed) -> gym.Env:
         scenarios=scenario_path,
         agent_specs=agent_specs,
         headless=headless,  # If False, enables Envision display.
-        visdom=False,  # If True, enables Visdom display.
+        visdom=True,  # If True, enables Visdom display.
         seed=seed,
-        
+        envision_record_data_replay_path="./data_record/",
     )
 
     env = Reward(env=env)
