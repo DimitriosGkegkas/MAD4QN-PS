@@ -13,6 +13,8 @@ parser.add_argument('--headless', action='store_true', help='Not visualise the s
 parser.add_argument('--load_checkpoint', action='store_true', help='Load saved models')
 args = parser.parse_args()
 
+batch_size = 256
+
 if __name__ == '__main__':
 
     agent_spec = AgentSpec(
@@ -34,15 +36,15 @@ if __name__ == '__main__':
 
     agents_straight = DuelingDDQNAgent(gamma=0.99, epsilon=1.0, lr=0.0001, input_dims=(env.observation_space.shape),
                                        n_actions=2, mem_size=int(mem_size*1.5), eps_min=0.01,
-                                       batch_size=256, replace=1000, eps_dec=1e-6, chkpt_dir='models',
+                                       batch_size=batch_size, replace=1000, eps_dec=1e-6, chkpt_dir='models',
                                        algo='DuelingDDQNAgents',
                                        env_name=f'agent_straight_{args.seed}')
     agents_left = DuelingDDQNAgent(gamma=0.99, epsilon=1.0, lr=0.0001, input_dims=(env.observation_space.shape),
-                                   n_actions=2, mem_size=int(mem_size*1.5), eps_min=0.01, batch_size=256,
+                                   n_actions=2, mem_size=int(mem_size*1.5), eps_min=0.01, batch_size=batch_size,
                                    replace=1000, eps_dec=1e-6, chkpt_dir='models', algo='DuelingDDQNAgents',
                                    env_name=f'agent_left_{args.seed}')
     agents_right = DuelingDDQNAgent(gamma=0.99, epsilon=1.0, lr=0.0001, input_dims=(env.observation_space.shape),
-                                    n_actions=2, mem_size=mem_size, eps_min=0.01, batch_size=256,
+                                    n_actions=2, mem_size=mem_size, eps_min=0.01, batch_size=batch_size,
                                     replace=1000, eps_dec=1e-6, chkpt_dir='models', algo='DuelingDDQNAgents',
                                     env_name=f'agent_right_{args.seed}')
 
