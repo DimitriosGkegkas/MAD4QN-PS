@@ -4,14 +4,13 @@ import numpy as np
 from datetime import datetime
 
 class ExperimentDataCollector:
-    def __init__(self, vehicle_params, algorithm_identifier):
+    def __init__(self,  algorithm_identifier):
         """
         Initialize the collector with necessary data structures and vehicle model parameters.
-        :param vehicle_params: Parameters for initializing ElectricVehicleEnergyModel.
+        :algorithm_identifier: Identifier for the algorithm used in the experiment
         """
         self.scenarios = []  # List to store data for all scenarios
         self.current_scenario = None  # Store current scenario data
-        self.vehicle_params = vehicle_params  # Parameters for ElectricVehicleEnergyModel
         self.algorithm_identifier = algorithm_identifier
 
     def start_new_scenario(self, agents_with_types):
@@ -33,7 +32,7 @@ class ExperimentDataCollector:
                 "type": agent_type,
                 "speeds": [],
                 "accelerations": [],
-                "energy_model": ElectricVehicleEnergyModel(**self.vehicle_params),
+                "energy_model": ElectricVehicleEnergyModel(),
                 "travel_distance": 0,
                 "travel_time": 0,
                 "waiting_time": 0,

@@ -3,19 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # Initialize the model with constant parameters
-vehicle_model = ElectricVehicleEnergyModel(
-    mass=1500,  # kg
-    g=9.8066,  # m/s^2
-    c_r=0.015,  # rolling resistance coefficient
-    c1=0.01,  # speed coefficient for rolling resistance
-    c2=0.1,  # constant coefficient for rolling resistance
-    rho_air=1.225,  # air density [kg/m^3]
-    A_f=2.2,  # frontal area [m^2]
-    C_d=0.28,  # drag coefficient
-    eta_driveline=0.92,  # driveline efficiency
-    eta_motor=0.91,  # motor efficiency
-    alpha=0.9 # regenerative braking efficiency parameter
-)
+vehicle_model = ElectricVehicleEnergyModel()
 
 
 # Experiment 1: Accelerate to a constant speed and travel 1 km

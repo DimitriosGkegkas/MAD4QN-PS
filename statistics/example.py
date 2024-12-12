@@ -2,26 +2,11 @@ from statistics.experiment_data_collector import ExperimentDataCollector
 from statistics.statistics_plotter import  StatisticsPlotter
 import random
 
-# Vehicle parameters for testing
-vehicle_params = {
-    "mass": 1500,
-    "g": 9.8066,
-    "c_r": 0.015,
-    "c1": 0.01,
-    "c2": 0.1,
-    "rho_air": 1.225,
-    "A_f": 2.2,
-    "C_d": 0.28,
-    "eta_driveline": 0.92,
-    "eta_motor": 0.91,
-    "alpha": 0.0411,
-}
-
 def run_test1():
     """
     Run the test for a given algorithm identifier.
     """
-    collector = ExperimentDataCollector(vehicle_params, "algorithm_A")
+    collector = ExperimentDataCollector("algorithm_A")
 
     # Run 10 scenarios
     for scenario_index in range(10):
@@ -59,7 +44,7 @@ def run_test2():
     """
     Run the test for a given algorithm identifier.
     """
-    collector = ExperimentDataCollector(vehicle_params, "algorithm_B")
+    collector = ExperimentDataCollector("algorithm_B")
 
     # Run 10 scenarios
     for scenario_index in range(10):

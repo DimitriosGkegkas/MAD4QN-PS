@@ -1,21 +1,22 @@
 import math
+from energy.config import vehicle_params
 
 class ElectricVehicleEnergyModel:
-    def __init__(self, mass, g, c_r, c1, c2, rho_air, A_f, C_d, eta_driveline, eta_motor, alpha):
+    def __init__(self):
         """
         Initialize the vehicle parameters.
         """
-        self.mass = mass  # Vehicle mass [kg]
-        self.g = g  # Gravitational constant [m/s^2]
-        self.c_r = c_r  # Rolling resistance coefficient
-        self.c1 = c1  # Rolling resistance speed coefficient
-        self.c2 = c2  # Rolling resistance constant coefficient
-        self.rho_air = rho_air  # Air density [kg/m^3]
-        self.A_f = A_f  # Frontal area [m^2]
-        self.C_d = C_d  # Drag coefficient
-        self.eta_driveline = eta_driveline  # Driveline efficiency
-        self.eta_motor = eta_motor  # Motor efficiency
-        self.alpha = alpha  # Regenerative braking efficiency parameter
+        self.mass = vehicle_params["mass"]  # Vehicle mass [kg]
+        self.g = vehicle_params["g"]  # Gravitational constant [m/s^2]
+        self.c_r = vehicle_params["c_r"]  # Rolling resistance coefficient
+        self.c1 = vehicle_params["c1"]  # Rolling resistance speed coefficient
+        self.c2 = vehicle_params["c2"]  # Rolling resistance constant coefficient
+        self.rho_air = vehicle_params["rho_air"]  # Air density [kg/m^3]
+        self.A_f = vehicle_params["A_f"] # Frontal area [m^2]
+        self.C_d = vehicle_params["C_d"]  # Drag coefficient
+        self.eta_driveline = vehicle_params["eta_driveline"]  # Driveline efficiency
+        self.eta_motor = vehicle_params["eta_motor"]  # Motor efficiency
+        self.alpha = vehicle_params["alpha"]  # Regenerative braking efficiency parameter
         self.energy_consumption = 0.0  # Total energy consumption [J]
         self.total_distance = 0.0  # Total distance traveled [m]
     
