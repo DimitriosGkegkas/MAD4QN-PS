@@ -1,5 +1,5 @@
-from experiment_data_collector import ExperimentDataCollector
-from statistics_plotter import  StatisticsPlotter
+from statistics.experiment_data_collector import ExperimentDataCollector
+from statistics.statistics_plotter import  StatisticsPlotter
 import random
 
 # Vehicle parameters for testing
