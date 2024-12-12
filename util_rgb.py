@@ -79,8 +79,9 @@ def position2road(position):
 
 
 class Reward(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, agent_names=['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']):
         super().__init__(env)
+        self.agent_names = agent_names
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
@@ -94,9 +95,8 @@ class Reward(gym.Wrapper):
     def _reward(self, obs, env_reward):
         num_vehs = len(obs.keys())
         reward = [0 for _ in range(num_vehs)]
-        agent_names = ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
         w = 0
-        for i, j in enumerate(agent_names):
+        for i, j in enumerate(self.agent_names):
             if j in obs.keys():
 
                 if obs[j][4][5]:
@@ -117,7 +117,7 @@ class Reward(gym.Wrapper):
 
 
 class Observation(gym.ObservationWrapper):
-    def __init__(self, shape, env: gym.Env):
+    def __init__(self, shape, env: gym.Env, agent_names=['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']):
         super().__init__(env)
         self.shape = (shape[2], shape[0], shape[1])
         self.observation_space = gym.spaces.Box(
@@ -126,11 +126,11 @@ class Observation(gym.ObservationWrapper):
             shape=self.shape,
             dtype=np.float32,
         )
+        self.agent_names = agent_names
 
     def observation(self, obs):
-        agent_names = ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
         new_obs = {}
-        for i in agent_names:
+        for i in self.agent_names:
             if i in obs.keys():
                 new_obs[i] = obs[i][13].data
                 new_obs[i] = cv2.resize(new_obs[i], self.shape[1:], interpolation=cv2.INTER_AREA)
@@ -140,13 +140,14 @@ class Observation(gym.ObservationWrapper):
 
 
 class StackFrames(gym.ObservationWrapper):
-    def __init__(self, env, repeat):
+    def __init__(self, env, repeat, agent_names=['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']):
         super(StackFrames, self).__init__(env)
         self.observation_space = gym.spaces.Box(env.observation_space.low.repeat(repeat, axis=0),
                                                 env.observation_space.high.repeat(repeat, axis=0),
                                                 dtype=np.float32)
         self.stack = [collections.deque(maxlen=repeat), collections.deque(maxlen=repeat),
                       collections.deque(maxlen=repeat), collections.deque(maxlen=repeat)]
+        self.agent_names = agent_names
     
     def reset(self):
         self.stack[0].clear()
@@ -155,15 +156,13 @@ class StackFrames(gym.ObservationWrapper):
         self.stack[3].clear()
         
         observation = self.env.reset()
-        agent_names = ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
-        for i, j in enumerate(agent_names):
+        for i, j in enumerate(self.agent_names):
             for _ in range(self.stack[i].maxlen):
                 self.stack[i].append(observation[j])
         obs_dict = {}
-        obs_dict['Agent-0'] = np.array(self.stack[0]).reshape(self.observation_space.low.shape)
-        obs_dict['Agent-1'] = np.array(self.stack[1]).reshape(self.observation_space.low.shape)
-        obs_dict['Agent-2'] = np.array(self.stack[2]).reshape(self.observation_space.low.shape)
-        obs_dict['Agent-3'] = np.array(self.stack[3]).reshape(self.observation_space.low.shape)
+
+        for i, j in enumerate(self.agent_names):
+            obs_dict[j] = np.array(self.stack[i]).reshape(self.observation_space.low.shape)
         
         return obs_dict
 
@@ -179,20 +178,21 @@ class StackFrames(gym.ObservationWrapper):
         return obs_dict
 
 
-def make_env(env_name, agent_specs, scenario_path, headless, seed) -> gym.Env:
+def make_env(env_name, agent_specs, scenario_path, headless, seed, visdom = False) -> gym.Env:
     # Create environment
     env = gym.make(
         env_name,
         scenarios=scenario_path,
         agent_specs=agent_specs,
         headless=headless,  # If False, enables Envision display.
-        visdom=True,  # If True, enables Visdom display.
+        visdom=visdom,  # If True, enables Visdom display.
         seed=seed,
         envision_record_data_replay_path="./data_record/",
     )
+    agent_names = agent_specs.keys()
 
-    env = Reward(env=env)
-    env = Observation(shape=(48, 48, 3), env=env)
-    env = StackFrames(env, repeat=3)
+    env = Reward(env=env, agent_names=agent_names)
+    env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
+    env = StackFrames(env, repeat=3, agent_names=agent_names)
 
     return env
