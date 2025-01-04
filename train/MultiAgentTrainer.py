@@ -18,7 +18,7 @@ class MultiAgentTrainer:
         total_steps=int(1e6),
         agent_count=4,
         algorithm_identifier='DuelingDDQNAgents',
-        evaluation_step=5000,
+        evaluation_step=100,
     ):
         self.args = args
         self.batch_size = batch_size
@@ -124,10 +124,8 @@ class MultiAgentTrainer:
             self.n_steps += 1
             ep_steps += 1
             self._log_progress(score, ep_steps)
-            if self.n_steps % self.evaluation_step == 0:
-                self.readyForEvaluation = True
-        self._evaluate_if_needed()
         self.n_episodes += 1
+        self._evaluate_if_needed()
         
 
     def _initialize_episode(self, id = None):
@@ -176,7 +174,7 @@ class MultiAgentTrainer:
             agent.learn()
 
     def _evaluate_if_needed(self):
-        if self.readyForEvaluation:
+        if self.n_episodes % self.evaluation_step == 0:
             self.readyForEvaluation = False
             scores, scores_per_scenario = self.eval()
             elapsed_time = datetime.now() - self.start_time
