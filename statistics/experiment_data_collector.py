@@ -115,6 +115,14 @@ class ExperimentDataCollector:
                 "waiting_time": data["waiting_time"],
                 "state": data["state"],
             }
+        
+        # If at least one agent is still traveling, mark the scenario as incomplete
+        # If at least one agent crashed, mark the scenario as crashed
+        self.current_scenario["state"] = "crashed" if any(
+            agent["state"] == "crashed" for agent in self.current_scenario["agents_data"].values()
+        ) else "incomplete" if any(
+            agent["state"] == "traveling" for agent in self.current_scenario["agents_data"].values()
+        ) else "succeeded"
 
         # Save the scenario data and clear the active scenario
         self.scenarios.append(self.current_scenario)
@@ -128,44 +136,47 @@ class ExperimentDataCollector:
         :return: Dictionary with overall statistics.
         """
         stats_by_type = self.get_statistics_by_type()
-        total = sum(len(scenario["agents_data"]) for scenario in self.scenarios)
+        total = len(self.scenarios)
         overall_stats = {
             "average_travel_time": np.mean([
                 data["travel_time"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
+                if scenario["state"] == "succeeded"
             ]),
             "average_waiting_time": np.mean([
                 data["waiting_time"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
+                if scenario["state"] == "succeeded"
             ]),
             "average_speed": np.mean([
                 data["average_speed"] 
                 for scenario in self.scenarios 
                 for agent_id, data in scenario["averages"].items() 
+                if scenario["state"] == "succeeded"
             ]),
             "average_acceleration": np.mean([
                 data["average_acceleration"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
+                if scenario["state"] == "succeeded"
             ]),
             "average_energy_consumption": np.mean([
                 data["energy_consumption"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
+                if scenario["state"] == "succeeded"
             ]),
             "success_rate": sum(
-                1 for scenario in self.scenarios for agent in scenario["agents_data"].values() if agent["state"] == "succeeded"
+                1 for scenario in self.scenarios if scenario["state"] == "succeeded"
             ) / total * 100 if total > 0 else 0,
             "crash_rate": sum(
-                1 for scenario in self.scenarios for agent in scenario["agents_data"].values() if agent["state"] == "crashed"
+                1 for scenario in self.scenarios if scenario["state"] == "crashed"
             ) / total * 100 if total > 0 else 0,
             "incomplete_rate": sum(
-                1 for scenario in self.scenarios for agent in scenario["agents_data"].values() if agent["state"] == "traveling"
+                1 for scenario in self.scenarios if scenario["state"] == "incomplete"
             ) / total * 100 if total > 0 else 0,
-
-    
         }
 
         return {**overall_stats, "by_type": stats_by_type}
@@ -192,16 +203,19 @@ class ExperimentDataCollector:
 
             type_stats[agent_type] = {}
             type_stats[agent_type]["average_travel_time"] = np.mean([
-                data["waiting_time"]
+                data["travel_time"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
                 if data["type"] == agent_type
+                if data["state"] == "succeeded"
+
             ])
             type_stats[agent_type]["average_waiting_time"] = np.mean([
                 data["waiting_time"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
                 if data["type"] == agent_type
+                if data["state"] == "succeeded"
             ])
 
             type_stats[agent_type]["average_speed"] = np.mean([
@@ -209,18 +223,21 @@ class ExperimentDataCollector:
                 for scenario in self.scenarios 
                 for agent_id, data in scenario["averages"].items() 
                 if data["type"] == agent_type
+                if scenario["state"] == "succeeded"
             ])
             type_stats[agent_type]["average_acceleration"] = np.mean([
                 data["average_acceleration"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
                 if data["type"] == agent_type
+                if scenario["state"] == "succeeded"
             ])
             type_stats[agent_type]["average_energy_consumption"] = np.mean([
                 data["energy_consumption"]
                 for scenario in self.scenarios
                 for agent_id, data in scenario["averages"].items()
                 if data["type"] == agent_type
+                if scenario["state"] == "succeeded"
             ])
             type_stats[agent_type]["success_rate"] = sum(
                 1 for scenario in self.scenarios for agent in scenario["agents_data"].values() 
@@ -257,6 +274,49 @@ class ExperimentDataCollector:
             for agent in scenario["agents_data"].values()
         )
         return total / count if count > 0 else 0
+    
+
+    def save_raw_data(self, base_dir = "data"):
+        """
+        Save raw data for all scenarios and agents to files in a structured directory format.
+        """
+        # Subfolder for the experiment based on the algorithm identifier
+        experiment_folder = os.path.join(base_dir, self.algorithm_identifier)
+
+        # Subfolder for the current date (DDMMYYYY format)
+        current_date = datetime.now().strftime("%d%m%Y")
+        date_folder = os.path.join(experiment_folder, current_date)
+
+        # Create directories if they don't exist
+        os.makedirs(date_folder, exist_ok=True)
+
+        # Save raw data self.scenarios in one file called raw_data.npy
+        scenario_file_path = os.path.join(date_folder, f"raw_data.npy")
+        np.save(scenario_file_path, self.scenarios)
+        print(f"Raw data saved to {scenario_file_path}")
+
+    def load_raw_data(self, base_dir = "data", date = None):
+        """
+        Load raw data from files in a structured directory format.
+        """
+        # Subfolder for the experiment based on the algorithm identifier
+        experiment_folder = os.path.join(base_dir, self.algorithm_identifier)
+
+        # Find the most recent date folder if none is specified
+        if date is None:
+            dates = [
+                d for d in os.listdir(experiment_folder) if os.path.isdir(os.path.join(experiment_folder, d))
+            ]
+            if not dates:
+                raise ValueError(f"No date folders found for algorithm '{self.algorithm_identifier}'.")
+            date = max(dates, key=lambda d: datetime.strptime(d, "%d%m%Y"))  # Most recent date
+
+        # Load the total.npy file
+        data_dir = os.path.join(experiment_folder, date)
+
+        # Load raw data from file
+        scenario_file_path = os.path.join(data_dir, f"raw_data.npy")
+        self.scenarios = np.load(scenario_file_path, allow_pickle=True)
 
     def save(self, base_dir = "data"):
         """

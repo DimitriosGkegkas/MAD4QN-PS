@@ -93,8 +93,8 @@ if __name__ == "__main__":
     plotter = StatisticsPlotter()
 
     # Add algorithms (most recent data is selected by default)
-    plotter.add_algorithm("algorithm_A")
-    plotter.add_algorithm("algorithm_B")
+    plotter.add_algorithm("random_0")
+    plotter.add_algorithm("mad4qn_0")
 
     # Plot average travel time comparison
     plotter.plot_combined_statistics()
