@@ -10,25 +10,31 @@ class ExperimentDataCollector:
         :algorithm_identifier: Identifier for the algorithm used in the experiment
         """
         self.scenarios = []  # List to store data for all scenarios
-        self.current_scenario = None  # Store current scenario data
+        self.current_scenarios = {}  # Store current scenario data
         self.algorithm_identifier = algorithm_identifier
 
-    def start_new_scenario(self, agents_with_types):
+    # def add_agent(self, agent_id, agent_type, scenario_id):
+
+    def start_new_scenarios(self, scenario_ids, batch_agents_with_types):
         """
         Start a new scenario and initialize agents with their types.
-        :param agents_with_types: Dictionary mapping agent_id to agent_type.
+        :param batch_agents_with_types: Dictionary mapping agent_id to agent_type.
         """
-        if self.current_scenario is not None:
-            raise ValueError("A scenario is already active. Close it before starting a new one.")
-        
-        self.current_scenario = {
-            "agents_data": {},  # Dictionary to store data for each agent
-            "averages": {},  # Store averages for speed, acceleration, energy, etc.
-        }
 
         # Initialize each agent with type and state
-        for agent_id, agent_type in agents_with_types.items():
-            self.current_scenario["agents_data"][agent_id] = {
+        for scenario_id, agents_with_types in zip(scenario_ids, batch_agents_with_types):
+            for agent_id, agent_type in agents_with_types.items():
+                self.add_agent(agent_id, agent_type, scenario_id)
+
+    def add_agent(self, agent_id, agent_type, scenario_id):
+        if scenario_id not in self.current_scenarios:
+            self.current_scenarios[scenario_id] = {
+                "agents_data": {},  # Dictionary to store data for each agent
+                "averages": {},  # Store averages for speed, acceleration, energy, etc.
+            }
+
+        if agent_id not in self.current_scenarios[scenario_id]["agents_data"]:
+            self.current_scenarios[scenario_id]["agents_data"][agent_id] = {
                 "type": agent_type,
                 "speeds": [],
                 "accelerations": [],
@@ -39,7 +45,11 @@ class ExperimentDataCollector:
                 "state": "traveling",  # Possible states: traveling, succeeded, crashed
             }
 
-    def record_agent_data(self, agent_id, speed, acceleration, dt, travel_distance, is_waiting = False):
+    def add_social_vehicle(self, agent_id, scenario_id):
+        self.add_agent(agent_id, "social", scenario_id)
+        self.mark_agent_succeeded(agent_id, scenario_id)
+
+    def record_agent_data(self, agent_id, speed, acceleration, dt, travel_distance, is_waiting = False, scenario_id = None):
         """
         Record speed, acceleration, and energy consumption for a given agent in the current scenario.
         :param agent_id: Unique identifier for the agent
@@ -49,14 +59,14 @@ class ExperimentDataCollector:
         :param travel_distance: Distance traveled during this step
         :param is_waiting: Boolean indicating whether the agent is waiting
         """
-        if self.current_scenario is None:
+        if self.current_scenarios is None:
             raise ValueError("No active scenario. Start a new scenario first.")
-
-        if agent_id not in self.current_scenario["agents_data"]:
-            raise ValueError(f"Agent {agent_id} not initialized in the current scenario.")
+        
+        assert scenario_id is not None, "Scenario id must be provided"
+        assert self.current_scenarios[scenario_id] is not None, "Scenario id must be valid"
 
         # Update agent's data
-        agent_data = self.current_scenario["agents_data"][agent_id]
+        agent_data = self.current_scenarios[scenario_id]["agents_data"][agent_id]
 
         # Append speed and acceleration
         agent_data["speeds"].append(speed)
@@ -73,40 +83,43 @@ class ExperimentDataCollector:
         # Update energy model
         agent_data["energy_model"].process_time_step(speed, acceleration, time_step=dt)
 
-    def mark_agent_succeeded(self, agent_id):
+    def mark_agent_succeeded(self, agent_id, scenario_id):
         """Mark the specified agent as succeeded."""
-        self._change_agent_state(agent_id, "succeeded")
+        self._change_agent_state(agent_id, "succeeded", scenario_id)
 
-    def mark_agent_crashed(self, agent_id):
+    def mark_agent_crashed(self, agent_id, scenario_id):
         """Mark the specified agent as crashed."""
-        self._change_agent_state(agent_id, "crashed")
+        self._change_agent_state(agent_id, "crashed", scenario_id)
 
-    def _change_agent_state(self, agent_id, state):
+    def _change_agent_state(self, agent_id, state, scenario_id):
         """
         Internal method to change an agent's state.
         :param agent_id: Unique identifier for the agent
         :param state: New state for the agent ('succeeded' or 'crashed')
         """
-        if self.current_scenario is None:
+        if self.current_scenarios is None:
             raise ValueError("No active scenario. Start a new scenario first.")
+        
+        assert scenario_id is not None, "Scenario id must be provided"
+        assert self.current_scenarios[scenario_id] is not None, "Scenario id must be valid"
 
-        if agent_id not in self.current_scenario["agents_data"]:
-            raise ValueError(f"Agent {agent_id} not initialized in the current scenario.")
-
-        self.current_scenario["agents_data"][agent_id]["state"] = state
-
+        self.current_scenarios[scenario_id]["agents_data"][agent_id]["state"] = state
     def close_scenario(self):
         """Close the current scenario and calculate averages."""
-        if self.current_scenario is None:
+        if self.current_scenarios is None:
             raise ValueError("No active scenario to close.")
+        for current_scenario in self.current_scenarios.values():
+            self._close_scenario(current_scenario)
+        self.current_scenarios = {}
+    def _close_scenario(self, current_scenario):
 
         # Compute averages and finalize agent statistics
-        for agent_id, data in self.current_scenario["agents_data"].items():
+        for agent_id, data in current_scenario["agents_data"].items():
             avg_speed = sum(data["speeds"]) / len(data["speeds"]) if data["speeds"] else 0
             avg_acceleration = sum(data["accelerations"]) / len(data["accelerations"]) if data["accelerations"] else 0
             energy_consumption = data["energy_model"].get_energy_consumption_per_km()
 
-            self.current_scenario["averages"][agent_id] = {
+            current_scenario["averages"][agent_id] = {
                 "type": data["type"],
                 "average_speed": avg_speed,
                 "average_acceleration": avg_acceleration,
@@ -118,15 +131,14 @@ class ExperimentDataCollector:
         
         # If at least one agent is still traveling, mark the scenario as incomplete
         # If at least one agent crashed, mark the scenario as crashed
-        self.current_scenario["state"] = "crashed" if any(
-            agent["state"] == "crashed" for agent in self.current_scenario["agents_data"].values()
+        current_scenario["state"] = "crashed" if any(
+            agent["state"] == "crashed" for agent in current_scenario["agents_data"].values()
         ) else "incomplete" if any(
-            agent["state"] == "traveling" for agent in self.current_scenario["agents_data"].values()
+            agent["state"] == "traveling" for agent in current_scenario["agents_data"].values()
         ) else "succeeded"
 
-        # Save the scenario data and clear the active scenario
-        self.scenarios.append(self.current_scenario)
-        self.current_scenario = None
+        self.scenarios.append(current_scenario)
+
 
     def get_statistics(self):
         """

@@ -1,24 +1,31 @@
 import pathlib
-import numpy as np
+import argparse
+from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from smarts.core.agent_interface import AgentInterface, AgentType
-from smarts.core.agent import Agent
 from smarts.zoo.agent_spec import AgentSpec
-from evaluation.evaluation_simulation import run_evaluation_simulation, parse_arguments
 
 if __name__ == '__main__':
-    args = parse_arguments()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", default=0, type=int)
+    parser.add_argument('--headless', action='store_true', help='Not visualize the simulation')
+    parser.add_argument('--load_checkpoint', action='store_true', help='Load saved models')
+    args = parser.parse_args()
+    args.headless = True
 
-
-    agents_spec = {
-    }
+    agent_spec = AgentSpec(
+            interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
+        )
     
     scenarios_path_base = pathlib.Path(__file__).absolute().parent.parent / "scenarios" / "sumo" / "traffic_lights" 
 
 
-    for baseline_algo in ["FTTL1", "FTTL2", "FTTLOPT", "ATL1", "ATL2"]:
-        print(f"Running evaluation for {baseline_algo}")
-        scenarios = [str(scenario) for scenario in (scenarios_path_base / baseline_algo).iterdir() if not scenario.is_file()]
-        run_evaluation_simulation(scenarios, agents_spec, baseline_algo, args.seed, True)
-
-
-
+    for baseline_algo in ["FTTL1", "FTTL2", "FTTLOPT", "ATL1", "ATL2", "Centralized"]:
+    # for baseline_algo in ["FTTL1"]:
+        scenario_subdir = scenarios_path_base / baseline_algo
+        trainer = MultiAgentTrainerParallel(args, num_env=27, agent_count=0, algorithm_identifier=baseline_algo)
+        trainer.initialize_environment(
+            agent_spec,
+            scenario_subdir=scenario_subdir,
+            parallel=False,
+        )
+        trainer.full_eval(parallel=False)

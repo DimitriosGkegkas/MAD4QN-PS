@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch as T
 
 class DuelingDQNetwork(nn.Module):
-    def __init__(self, lr, n_actions, name, input_dims, chkpt_dir):
+    def __init__(self, lr, n_actions, name, input_dims, chkpt_dir, device = 'cpu'):
         super(DuelingDQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
@@ -22,7 +22,7 @@ class DuelingDQNetwork(nn.Module):
 
         self.optimizer = optim.RMSprop(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = device
         self.to(self.device)
 
     def calculate_conv_output_dims(self, input_dims):

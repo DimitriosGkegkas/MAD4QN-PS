@@ -23,8 +23,7 @@ gen_scenario(
     scenario=Scenario(
         map_spec=MapSpec(
             source = str(current_file_path.parent.parent / "map.net.xml"),
-            shift_to_origin=False,
-            lanepoint_spacing=1.0,
+            shift_to_origin = True
         ),
         traffic=None,
         ego_missions=[

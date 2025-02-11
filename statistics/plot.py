@@ -5,7 +5,23 @@ import random
 
 if __name__ == "__main__":
 
-    algorithms = ["mad4qn","fcfs", "random", "FTTL1", "FTTL2", "FTTLOPT", "ATL1", "ATL2",]
+    algorithms = [
+        # "ATL1", 
+                    # "ATL2",
+                    # "FTTL1",
+                    # "FTTL2",
+                    # "FTTLOPT",
+                
+                    # "Central",
+                    "DuelingDDQNAgentsNoParaller",
+                    "DuelingDDQNAgentsNoRandomLR",
+                  "MAD4QN-PS",
+                #   "RP",
+                #   "DuelingDDQNAgents1",
+                #     "DuelingDDQNAgents-v1",
+                #     "DuelingDDQNAgentsNoRandom",
+                #     "DuelingDDQNAgentsNoParaller"
+                  ]
 
     for algo in algorithms:
         data_collector = ExperimentDataCollector(algo)
