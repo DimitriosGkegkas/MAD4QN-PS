@@ -71,7 +71,7 @@ class MultiAgentTrainerParallel:
         evaluation = False,
         preload = False
     ):
-        mem_size = 1 if evaluation else 1.5e5
+        mem_size = 1 if evaluation else 1e5
         if evaluation or preload:
             chkpt_dir = base_dir
             assert os.path.exists(chkpt_dir), f"Checkpoint directory {chkpt_dir} does not exist"
@@ -198,10 +198,12 @@ class MultiAgentTrainerParallel:
 
     def _is_episode_ended(self, observations, rewards, terminated, info):
         return  (
-                    len(observations) == 0 
+                    -10 in rewards # someone crashed
+                    or len(observations) == 0 
                     # or all(reward == -1 for reward in rewards) They have to learn not to stop
                     or ("__all__" in terminated and terminated["__all__"])
                     # or ep_steps > 1000
+                    
                 ) \
                 and (not info["social_traffic"])
 
@@ -227,12 +229,7 @@ class MultiAgentTrainerParallel:
                     in zip(batch_observations, batch_rewards, batch_terminated, batch_infos)]
     
     def act(self, obs, turning_intention):
-        if turning_intention == 'straight':
-            return self.agents['straight'].choose_action(obs, self.evaluate)
-        elif turning_intention == 'left':
-            return self.agents['left'].choose_action(obs, self.evaluate)
-        elif turning_intention == 'right':
-            return self.agents['right'].choose_action(obs, self.evaluate)
+        return self.agents[turning_intention].choose_action(obs, self.evaluate)
         
     def format_action(self, action):
         return action
@@ -258,8 +255,7 @@ class MultiAgentTrainerParallel:
     def _store_transitions(self, observations, agent_actions, agent_rewards, observations_, terminated, truncated, turning_intentions):
         for idx, agent_name in enumerate(self.agent_names):
             if agent_name in observations and agent_name in observations_:
-                done = terminated[agent_name] or truncated[agent_name]
-                self.agents[turning_intentions[agent_name]].store_transition(observations[agent_name], agent_actions[agent_name], agent_rewards[agent_name], observations_[agent_name], done)
+                self.agents[turning_intentions[agent_name]].store_transition(observations[agent_name], agent_actions[agent_name], agent_rewards[agent_name], observations_[agent_name], done=terminated[agent_name])
 
     def _update_agents(self):
         # if self.n_steps % (self.batch_size // 2) == 0:
