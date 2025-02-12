@@ -3,28 +3,42 @@ import numpy as np
 import os
 import time
 
-file_path = "training_stats/DuelingDDQNAgents/16012025/avg_reward.npy"
+# Set the file paths
+file_paths = {
+    "DuelingDDQN_1": "models/DuelingDDQNAgents/11022025/agent_straight_0_learning_curve.npy",
+    "DuelingDDQN_2": "models/DuelingDDQNAgents9/11022025/agent_straight_0_learning_curve.npy",
+    "DropOutLayer": "models/DropOutLayer/11022025/agent_straight_0_learning_curve.npy"
+}
 
-st.title("Live Visualization of .npy File")
+# Define the moving average function
+def moving_average(data, window_size=50):
+    if len(data) < window_size:
+        return data  # Avoid computing if not enough data
+    return np.convolve(data, np.ones(window_size)/window_size, mode='same')
 
-# Create a placeholder for the chart
-chart_placeholder = st.empty()
-chart_placeholder1 = st.empty()
+# Streamlit UI
+st.title("Live Visualization of .npy File with Moving Average")
 
+# Create placeholders for the charts
+chart_placeholders = {key: st.empty() for key in file_paths}
+chart_placeholders_avg = {key: st.empty() for key in file_paths}  # For moving averages
 
 while True:
-    if os.path.exists(file_path):
-        # Load data from the .npy file
-        data = np.load("models/DuelingDDQNAgents/11022025/agent_straight_0_learning_curve.npy", allow_pickle=True)
-        data2 = np.load("models/DuelingDDQNAgents9/11022025/agent_straight_0_learning_curve.npy", allow_pickle=True)
-        # Update the line chart with the new data
-        chart_placeholder.line_chart([[d["loss"],d["epsilon"]] for d in data if d is not None])
+    for name, path in file_paths.items():
+        if os.path.exists(path):
+            # Load data
+            data = np.load(path, allow_pickle=True)
+            if data is not None and len(data) > 0:
+                loss_values = [d["loss"] for d in data if d is not None]
+                epsilon_values = [d["epsilon"] for d in data if d is not None]
+                
+                # Compute moving averages
+                loss_avg = moving_average(loss_values)
 
-        # Update the line chart with the new data
-        chart_placeholder1.line_chart([[d["loss"],d["epsilon"]] for d in data2 if d is not None])
+                # Update original data chart
+                chart_placeholders[name].line_chart({"Loss": loss_values, "Loss (Moving Avg)": loss_avg, "Epsilon": epsilon_values})
+        else:
+            st.write(f"Waiting for file: {path}")
 
-    else:
-        st.write("Waiting for file...")
-    
-    # Sleep for a while before refreshing
-    time.sleep(10)
+    # Sleep before refreshing
+    time.sleep(100)  # Reduce the wait time to make it more responsive

@@ -50,7 +50,7 @@ class DuelingDDQNAgent():
             else:  # Multiple observations of rgb images
                 state = T.tensor(observation_array, dtype=T.float).to(self.q_eval.device)
             
-
+            self.q_eval.eval()
             _, advantage = self.q_eval.forward(state)
             action = T.argmax(advantage, dim=-1).item()
         else:
@@ -107,7 +107,8 @@ class DuelingDDQNAgent():
         # Check if there are enough experiences in memory to sample a batch for training
         if self.memory.mem_cntr < self.batch_size:
             return  # Exit if not enough samples
-
+        self.q_eval.train()
+        self.q_next.train()
         # Reset the gradients of the optimizer to zero
         self.q_eval.optimizer.zero_grad()
 
