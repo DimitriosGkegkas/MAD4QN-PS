@@ -89,11 +89,7 @@ class DuelingDDQNAgent():
         self.q_next.load_checkpoint()
 
     def add_to_learning_curve(self, loss):
-        # I will save to a list the object {
-        # 'loss': loss,
-        # 'epsilon': self.epsilon,
-        # 'learn_step_counter': self.learn_step_counter
-        # }
+
         self.learning_curve.append({
             'loss': loss,
             'epsilon': self.epsilon,
@@ -101,7 +97,8 @@ class DuelingDDQNAgent():
         })
 
         # Save it to a file
-        np.save(os.path.join(self.chkpt_dir, self.env_name + '_learning_curve.npy'), self.learning_curve)
+        if (self.learn_step_counter % 1000 == 0):
+            np.save(os.path.join(self.chkpt_dir, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
 
     def learn(self):
         # Check if there are enough experiences in memory to sample a batch for training
