@@ -22,11 +22,16 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainer_v1(args, num_env=1, algorithm_identifier='DuelingDDQNAgents-v1', evaluation_step= 27)
+    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DuelingDDQNAgents-v1',evaluation_step=10)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
         )
     )
-    trainer.initialize_agents()
+    trainer.initialize_agents(
+        replace = 10000,
+        eps_dec=1e-5,
+        batch_size=2*256,
+        eps_min=0.1,
+    )
     trainer.train()
