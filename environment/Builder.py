@@ -7,6 +7,7 @@ from .Reward import Reward
 from .StackFrames import StackFrames
 from .Scenarios import Scenarios
 from .ParallelEnvWithScenario import ParallelEnvWithScenario
+from .InfoWrapper import InfoWrapper
 
 
 
@@ -26,6 +27,7 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom =
     env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
     env = StackFrames(env, repeat=3, agent_names=agent_names)
     env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
+    env = InfoWrapper(env, agent_names=agent_names)
 
     return env
 
@@ -51,6 +53,7 @@ def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed,
         env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
         env = StackFrames(env, repeat=3, agent_names=agent_names)
         env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
+        env = InfoWrapper(env, agent_names=agent_names)
         return env
     
     # lambdify

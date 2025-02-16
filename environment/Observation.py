@@ -31,6 +31,18 @@ class Observation(gym.ObservationWrapper):
             dtype=np.float32,
         )
         self.agent_names: List[str] = agent_names
+        
+    def reset(self, *, seed = None, options = None):
+        """Modifies the :attr:`env` after calling :meth:`reset`, returning a modified observation using :meth:`self.observation`."""
+        obs, info = self.env.reset(seed=seed, options=options)
+        return self.observation(obs), info
+
+    def step(self, action, conflicts=None):
+        """Modifies the :attr:`env` after calling :meth:`step` using :meth:`self.observation` on the returned observations."""
+        observation, reward, terminated, truncated, info = self.env.step(action, conflicts)
+        return self.observation(observation), reward, terminated, truncated, info
+
+
 
     def normalize_top_down_rgb(self, top_down_rgb: np.ndarray) -> np.ndarray:
         """

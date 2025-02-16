@@ -121,6 +121,9 @@ class Scenarios(gym.Wrapper):
 
     def set_scenario(self, scenario_index):
         self.evaluation_scenario = scenario_index
+        
+    def step(self, action, *args, **kwargs):
+        return self.env.step(action, *args, **kwargs)
 
     def reset(self, seed=None):
         if self.evaluation_scenario >= 0:
