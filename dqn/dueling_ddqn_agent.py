@@ -115,9 +115,9 @@ class DuelingDDQNAgent():
         self.q_eval.save_checkpoint()
         self.q_next.save_checkpoint()
 
-    def load_models(self):
-        self.q_eval.load_checkpoint()
-        self.q_next.load_checkpoint()
+    def load_models(self, path = None):
+        self.q_eval.load_checkpoint(path)
+        self.q_next.load_checkpoint(path)
 
     def add_to_learning_curve(self, loss):
 

@@ -77,10 +77,9 @@ class MultiAgentTrainerParallel:
         mem_size_factor=1.5,
         n_actions=2,
         base_dir='models',
-        preload = False
     ):
         mem_size = 1 if self.evaluate else 1e5
-        if self.evaluate or preload:
+        if self.evaluate:
             chkpt_dir = base_dir
             assert os.path.exists(chkpt_dir), f"Checkpoint directory {chkpt_dir} does not exist"
         else:
@@ -121,15 +120,16 @@ class MultiAgentTrainerParallel:
             )
         }
 
-        if self.evaluate or preload:
+        if self.evaluate:
             self.load_models()
 
-        if preload and not self.evaluate:
-            self._set_best_score()
+    def preload(self, path):
+        self.load_models(path)
+        self._set_best_score()
 
-    def load_models(self):
+    def load_models(self, path):
         for agent in self.agents.values():
-            agent.load_models()
+            agent.load_models(path)
 
     def train(self):
         while self.n_steps < self.total_steps:

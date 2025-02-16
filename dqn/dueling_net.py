@@ -8,8 +8,9 @@ import torch as T
 class DuelingDQNetwork(nn.Module):
     def __init__(self, lr, n_actions, name, input_dims, chkpt_dir, device = 'cpu'):
         super(DuelingDQNetwork, self).__init__()
-        self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
+        self.chkpt_dir = chkpt_dir
+        self.name = name
+        self.checkpoint_file = os.path.join(self.chkpt_dir, name)
         self.conv1 = nn.Conv2d(input_dims[0], 32, 8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, 3, stride=1)
@@ -47,7 +48,48 @@ class DuelingDQNetwork(nn.Module):
     def save_checkpoint(self):
         print('... saving checkpoint ...')
         T.save(self.state_dict(), self.checkpoint_file)
+        
+    def search_for_load_file(self, path):
+        """
+        Searches for the best matching checkpoint file in the given directory.
+        
+        :param path: The directory where checkpoint files are stored.
+        :return: The path to the best matching checkpoint file, or None if not found.
+        """
+        if not os.path.exists(path):
+            print(f"Path '{path}' does not exist.")
+            return None
 
-    def load_checkpoint(self):
+        # Split self.name based on '_'
+        name_parts = self.name.split('_')
+
+        if len(name_parts) < 4:
+            print("Error: The model name should have at least 4 parts separated by '_'.")
+            return None
+
+        # Extract first two and last two words
+        first_two = '_'.join(name_parts[:2])
+        last_two = '_'.join(name_parts[-2:])
+
+        best_match = None
+
+        # Search for matching files
+        for file in os.listdir(path):
+            if first_two in file and last_two in file:
+                best_match = os.path.join(path, file)
+                break  # If a match is found, return immediately
+
+        return best_match
+
+    def load_checkpoint(self, path=None):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file, map_location=T.device('cpu')))
+        if path is None:
+            self.load_state_dict(T.load(self.checkpoint_file, map_location=self.device))
+        else:
+            checkpoint_file = self.search_for_load_file(path)
+            if checkpoint_file:
+                print(self.checkpoint_file, checkpoint_file)
+                self.load_state_dict(T.load(checkpoint_file, map_location=self.device))
+            else:
+                raise ValueError("Checkpoint file not found.")
+        self.to(self.device)
