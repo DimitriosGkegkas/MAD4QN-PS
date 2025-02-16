@@ -9,7 +9,7 @@ from utils.debug import debug_save_any_img
 
 class DuelingDDQNAgent():
     def __init__(self, gamma, epsilon, lr, n_actions, input_dims, mem_size, batch_size, eps_min=0.01, eps_dec=5e-7,
-                 replace=1000, algo=None, env_name=None, chkpt_dir='tmp/dqn'):
+                 replace=1000, algo=None, env_name=None, chkpt_dir='tmp/dqn', training_stats_path='tmp/dqn_stats'):
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
@@ -22,6 +22,7 @@ class DuelingDDQNAgent():
         self.algo = algo
         self.env_name = env_name
         self.chkpt_dir = chkpt_dir
+        self.training_stats_path = training_stats_path
         self.action_space = [i for i in range(self.n_actions)]
         self.learn_step_counter = 0
         available_gpus = getAvailable(order='memory', limit=1)  # Get the best GPU by memory
@@ -97,8 +98,11 @@ class DuelingDDQNAgent():
         })
 
         # Save it to a file
+        self.save_learning_curve()
+            
+    def save_learning_curve(self):
         if (self.learn_step_counter % 1000 == 0):
-            np.save(os.path.join(self.chkpt_dir, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
+            np.save(os.path.join(self.training_stats_path, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
 
     def learn(self):
         # Check if there are enough experiences in memory to sample a batch for training

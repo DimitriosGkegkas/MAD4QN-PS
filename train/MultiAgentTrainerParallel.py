@@ -20,7 +20,8 @@ class MultiAgentTrainerParallel:
         agent_count=4,
         algorithm_identifier='DuelingDDQNAgents',
         evaluation_step=10,
-        num_env = 1
+        num_env = 1,
+        evaluation = False,
     ):
         self.args = args
         self.batch_size = batch_size
@@ -36,9 +37,16 @@ class MultiAgentTrainerParallel:
         self.num_env = num_env
         
         self.algorithm_identifier = algorithm_identifier
-        self.evaluate = False
+        self.evaluate = evaluation
         self.timestamp = datetime.now().strftime("%d%m%Y")
         self.agents = {}
+        if not self.evaluate:
+            self.training_stats_path = os.path.join(
+                    "training_stats",
+                    self.algorithm_identifier,
+                    self.timestamp,
+            )
+            os.makedirs(self.training_stats_path, exist_ok=True)
 
     def initialize_environment(self, agent_spec, scenario_subdir="scenarios/sumo/multi_scenario", parallel=True):
         torch.manual_seed(self.args.seed)
@@ -68,11 +76,10 @@ class MultiAgentTrainerParallel:
         mem_size_factor=1.5,
         n_actions=2,
         base_dir='models',
-        evaluation = False,
         preload = False
     ):
-        mem_size = 1 if evaluation else 1e5
-        if evaluation or preload:
+        mem_size = 1 if self.evaluate else 1e5
+        if self.evaluate or preload:
             chkpt_dir = base_dir
             assert os.path.exists(chkpt_dir), f"Checkpoint directory {chkpt_dir} does not exist"
         else:
@@ -80,8 +87,6 @@ class MultiAgentTrainerParallel:
                 base_dir, self.algorithm_identifier, self.timestamp
             )
             os.makedirs(chkpt_dir, exist_ok=True)
-
-        self.evaluate = evaluation
 
         input_dims = self.env.observation_space.shape
         agent_params = {
@@ -97,6 +102,7 @@ class MultiAgentTrainerParallel:
             'chkpt_dir': chkpt_dir,
             'algo': self.algorithm_identifier,
             'mem_size': int(mem_size * mem_size_factor),
+            'training_stats_path': self.training_stats_path,
         }
         self.agents = {
             'straight': DuelingDDQNAgent(
@@ -113,10 +119,10 @@ class MultiAgentTrainerParallel:
             )
         }
 
-        if evaluation or preload:
+        if self.evaluate or preload:
             self.load_models()
 
-        if preload:
+        if preload and not self.evaluate:
             self._set_best_score()
 
     def load_models(self):
@@ -284,40 +290,13 @@ class MultiAgentTrainerParallel:
             self.save_scores()
 
     def save_scores(self):
-        reward_path = os.path.join(
-                "training_stats",
-                self.algorithm_identifier,
-                self.timestamp,
-        )
-        os.makedirs(reward_path, exist_ok=True)
-        avg_reward_path = os.path.join(
-                reward_path, 
-                "avg_reward.npy"
-            )
-        avg_reward_per_scenario_path = os.path.join(
-                reward_path, 
-                "avg_reward_per_scenario.npy"
-            )
-        np.save(avg_reward_path, np.array(self.scores_list, dtype=object))
-        np.save(avg_reward_per_scenario_path, np.array(self.scores_per_scenario_list))
+        np.save(os.path.join(self.training_stats_path, "avg_reward.npy"), np.array(self.scores_list, dtype=object))
+        np.save(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), np.array(self.scores_per_scenario_list))
 
     def load_scores(self):
-        reward_path = os.path.join(
-                "training_stats",
-                self.algorithm_identifier,
-                self.timestamp,
-        )
-        avg_reward_path = os.path.join(
-                reward_path, 
-                "avg_reward.npy"
-            )
-        avg_reward_per_scenario_path = os.path.join(
-                reward_path, 
-                "avg_reward_per_scenario.npy"
-            )
         try:
-            self.scores_list = np.load(avg_reward_path, allow_pickle=True).tolist()
-            self.scores_per_scenario_list = np.load(avg_reward_per_scenario_path, allow_pickle=True).tolist()
+            self.scores_list = np.load(os.path.join(self.training_stats_path, "avg_reward.npy"), allow_pickle=True).tolist()
+            self.scores_per_scenario_list = np.load(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), allow_pickle=True).tolist()
         except:
             self.scores_list = []
             self.scores_per_scenario_list = []
