@@ -66,13 +66,14 @@ class MultiAgentTrainerParallel:
 
     def initialize_agents(
         self,
+        Tmax=1.0,
+        Tmin=0.1,
+        omega=1.0,
+        epsilon_decay_cycle_length=1000,
         batch_size=256,
         gamma=0.99,
-        epsilon=1.0,
         lr=0.0001,
-        eps_min=0.01,
         replace=1000,
-        eps_dec=1e-6,
         mem_size_factor=1.5,
         n_actions=2,
         base_dir='models',
@@ -90,15 +91,16 @@ class MultiAgentTrainerParallel:
 
         input_dims = self.env.observation_space.shape
         agent_params = {
+            'Tmax': Tmax,
+            'Tmin': Tmin,
+            'omega': omega,
+            'epsilon_decay_cycle_length': epsilon_decay_cycle_length,
             'gamma': gamma,
-            'epsilon': epsilon,
             'lr': lr,
             'input_dims': input_dims,
             'n_actions': n_actions,
-            'eps_min': eps_min,
             'batch_size': batch_size,
             'replace': replace,
-            'eps_dec': eps_dec,
             'chkpt_dir': chkpt_dir,
             'algo': self.algorithm_identifier,
             'mem_size': int(mem_size * mem_size_factor),
