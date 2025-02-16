@@ -281,7 +281,7 @@ class MultiAgentTrainerParallel:
         if self.n_episodes % self.evaluation_step == 0:
             scores, scores_per_scenario = self.eval()
             elapsed_time = datetime.now() - self.start_time 
-            self.scores_list.append((scores, str(elapsed_time)))
+            self.scores_list.append((scores, str(elapsed_time), self.n_steps))
             self.scores_per_scenario_list.append(scores_per_scenario)
             if scores > self.best_score:
                 for agent in self.agents.values():

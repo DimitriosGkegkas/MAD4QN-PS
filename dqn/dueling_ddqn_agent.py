@@ -25,6 +25,7 @@ class DuelingDDQNAgent():
         self.training_stats_path = training_stats_path
         self.action_space = [i for i in range(self.n_actions)]
         self.learn_step_counter = 0
+        self.total_steps = 0
         available_gpus = getAvailable(order='memory', limit=1)  # Get the best GPU by memory
         if available_gpus:
             self.device = T.device(f'cuda:{available_gpus[0]}')
@@ -94,17 +95,19 @@ class DuelingDDQNAgent():
         self.learning_curve.append({
             'loss': loss,
             'epsilon': self.epsilon,
-            'learn_step_counter': self.learn_step_counter
+            'learn_step_counter': self.learn_step_counter,
+            'total_steps': self.total_steps
         })
 
         # Save it to a file
         self.save_learning_curve()
             
     def save_learning_curve(self):
-        if (self.learn_step_counter % 1000 == 0):
+        if (self.learn_step_counter % 10 == 0):
             np.save(os.path.join(self.training_stats_path, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
 
     def learn(self):
+        self.total_steps += 1 
         # Check if there are enough experiences in memory to sample a batch for training
         if self.memory.mem_cntr < self.batch_size:
             return  # Exit if not enough samples
