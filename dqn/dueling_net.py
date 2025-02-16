@@ -47,7 +47,11 @@ class DuelingDQNetwork(nn.Module):
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+        checkpoint = {
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+        }
+        T.save(checkpoint, self.checkpoint_file)
         
     def search_for_load_file(self, path):
         """
@@ -81,15 +85,19 @@ class DuelingDQNetwork(nn.Module):
 
         return best_match
 
+        
     def load_checkpoint(self, path=None):
         print('... loading checkpoint ...')
         if path is None:
-            self.load_state_dict(T.load(self.checkpoint_file, map_location=self.device))
+            checkpoint = T.load(self.checkpoint_file, map_location=self.device)
         else:
             checkpoint_file = self.search_for_load_file(path)
             if checkpoint_file:
                 print(self.checkpoint_file, checkpoint_file)
-                self.load_state_dict(T.load(checkpoint_file, map_location=self.device))
+                checkpoint = T.load(checkpoint_file, map_location=self.device)
             else:
                 raise ValueError("Checkpoint file not found.")
+
+        self.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.to(self.device)
