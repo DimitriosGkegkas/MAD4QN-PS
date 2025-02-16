@@ -392,7 +392,7 @@ class MultiAgentTrainerParallel:
             test1.append({agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()})
             ep_steps += 1
         self.evaluate = True
-        print(f"Finished envisioning episode because ")
+        print(f"Finished envisioning episode")
         return  test, test1
 
     
@@ -472,12 +472,15 @@ class MultiAgentTrainerParallel:
     def full_eval(self, parallel = True):
         eval_episodes = len(self.scenarios)
         self.evaluate = True
-
+        all_rewards = []
         if parallel:
             data_collector = ExperimentDataCollector(self.algorithm_identifier)
             for ids in self.slice_list(list(range(eval_episodes)), self.num_env):
-                self._full_eval_episodes(ids, data_collector)
+                batch_rewards = self._full_eval_episodes(ids, data_collector)
+                all_rewards.extend(batch_rewards)
             data_collector.save_raw_data()
+            print(f'Finished evaluation in parallel')
+            print(f'Average reward: {np.mean(all_rewards):.3f}')
         else:
             data_collector = ExperimentDataCollector(self.algorithm_identifier)
             for id in range(eval_episodes):
@@ -485,3 +488,4 @@ class MultiAgentTrainerParallel:
             data_collector.save_raw_data()
         print(f'Finished evaluation')
         self.evaluate = False
+        return
