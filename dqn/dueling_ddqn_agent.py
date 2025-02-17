@@ -120,7 +120,9 @@ class DuelingDDQNAgent():
         self.q_next.load_checkpoint(path)
 
     def add_to_learning_curve(self, loss):
+        """ Store loss, epsilon, and steps with downsampling and efficient saving """
 
+        # Append new loss to temporary buffer
         self.learning_curve.append({
             'loss': loss,
             'epsilon': self.T,
@@ -128,12 +130,41 @@ class DuelingDDQNAgent():
             'total_steps': self.total_steps
         })
 
-        # Save it to a file
-        self.save_learning_curve()
-            
-    def save_learning_curve(self):
-        if (self.learn_step_counter % 1000 == 0):
-            np.save(os.path.join(self.training_stats_path, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
+        # Downsampling: Every 100 steps, store the averaged entry
+        if len(self.learning_curve) >= 100:
+            avg_loss = np.mean([entry['loss'] for entry in self.learning_curve])
+            avg_epsilon = np.mean([entry['epsilon'] for entry in self.learning_curve])
+            avg_step = self.learning_curve[-1]['learn_step_counter']
+            avg_total_steps = self.learning_curve[-1]['total_steps']
+
+            avg_entry = {
+                'loss': avg_loss,
+                'epsilon': avg_epsilon,
+                'learn_step_counter': avg_step,
+                'total_steps': avg_total_steps
+            }
+
+            # Save the averaged entry
+            self.save_learning_curve(avg_entry)
+
+            # Clear buffer
+            self.learning_curve = []
+
+    def save_learning_curve(self, entry):
+        """ Append data to file instead of storing everything in memory """
+        file_path = os.path.join(self.training_stats_path, self.env_name + '_learning_curve.npy')
+
+        # If file exists, load existing data, append new entry, and save
+        if os.path.exists(file_path):
+            existing_data = list(np.load(file_path, allow_pickle=True))
+        else:
+            existing_data = []
+
+        existing_data.append(entry)
+
+        # Save the updated data
+        np.save(file_path, existing_data, allow_pickle=True)
+
 
     def learn(self):
         self.total_steps += 1 
