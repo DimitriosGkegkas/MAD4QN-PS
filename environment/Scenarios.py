@@ -125,6 +125,7 @@ class Scenarios(gym.Wrapper):
     def reset(self, seed=None):
         if self.evaluation_scenario >= 0:
             scenario = self._scenarios_iterator[self.evaluation_scenario]
+            self.evaluation_scenario = -1
         else:
             scenario = np.random.choice(self._scenarios_iterator, p=self.scenarios_probs)
         return self.env.reset(seed = seed, options={"scenario": scenario})
