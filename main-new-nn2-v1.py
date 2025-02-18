@@ -4,6 +4,13 @@ from smarts.zoo.agent_spec import AgentSpec
 from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 
 
+class MultiAgentTrainer_v1 (MultiAgentTrainerParallel):
+    def format_action(self, action):
+        if action:
+            return (0, 0)
+        else:
+            return (15, 0)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -14,10 +21,10 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DropOutLayer2',evaluation_step=10, evaluation=False)
+    trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='DropOutLayer2-v1',evaluation_step=10, evaluation=False)
     trainer.initialize_environment(
         AgentSpec(
-            interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
+            interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
         ),
     )
     trainer.initialize_agents(
