@@ -160,7 +160,7 @@ class MultiAgentTrainerParallel:
             batch_observations = batch_observations_
             self.n_steps += 1
             ep_steps += 1
-            self._log_progress(np.average(batch_score), ep_steps)
+            self._log_progress(np.mean(batch_score), ep_steps)
         self.n_episodes += 1
         self._evaluate_if_needed()
         
@@ -412,7 +412,7 @@ class MultiAgentTrainerParallel:
             )
             self._extract_scenario_data_batch(ids, batch_observations, batch_infos, data_collector)
             batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
-            self._log_progress(np.average(batch_score), ep_steps)
+            self._log_progress(np.mean(batch_score), ep_steps)
             ep_steps += 1
         data_collector.close_scenario()
         return batch_score
