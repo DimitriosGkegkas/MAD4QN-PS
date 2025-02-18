@@ -10,6 +10,7 @@ class DuelingDQNetwork(nn.Module):
         super(DuelingDQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
+        self.name = name
         
         # Convolutional Layers
         self.conv1 = nn.Conv2d(input_dims[0], 32, 8, stride=1)

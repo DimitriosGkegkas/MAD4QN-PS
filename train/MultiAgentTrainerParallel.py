@@ -40,6 +40,7 @@ class MultiAgentTrainerParallel:
         self.evaluate = evaluation
         self.timestamp = datetime.now().strftime("%d%m%Y")
         self.agents = {}
+        self.training_stats_path = None
         if not self.evaluate:
             self.training_stats_path = os.path.join(
                     "training_stats",
@@ -103,7 +104,7 @@ class MultiAgentTrainerParallel:
             'chkpt_dir': chkpt_dir,
             'algo': self.algorithm_identifier,
             'mem_size': int(mem_size * mem_size_factor),
-            'training_stats_path': self.training_stats_path,
+            'training_stats_path': self.training_stats_path
         }
         self.agents = {
             'straight': DuelingDDQNAgent(
@@ -120,12 +121,11 @@ class MultiAgentTrainerParallel:
             )
         }
 
-        if self.evaluate:
-            self.load_models()
 
     def preload(self, path):
         self.load_models(path)
-        self._set_best_score()
+        if(not self.evaluate):
+            self._set_best_score()
 
     def load_models(self, path):
         for agent in self.agents.values():
