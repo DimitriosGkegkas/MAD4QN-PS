@@ -433,12 +433,26 @@ class MultiAgentTrainerParallel:
     def _extract_scenario_data_batch(self, ids, batch_observations, batch_infos, data_collector: ExperimentDataCollector):
         for id, observations, infos in zip(ids, batch_observations, batch_infos):
             self._extract_scenario_data(id, observations, infos, data_collector)
+            
+    def _get_directional_acceleration(self, linear_velocity, linear_acceleration):
+        speed = np.linalg.norm(linear_velocity)
+        if speed > 0:
+            velocity_direction = linear_velocity / speed
+        else:
+            velocity_direction = np.zeros_like(linear_velocity)
+        acceleration = np.dot(linear_acceleration, velocity_direction)
+        return acceleration
+        
 
     def _extract_scenario_data(self, id, observations, infos, data_collector:Union[ExperimentDataCollector]):
         for agent_id in self.agent_names:
             if agent_id in observations:
-                speed = infos[agent_id]['env_obs'].ego_vehicle_state.speed
-                acceleration = infos[agent_id]['env_obs'].ego_vehicle_state.linear_acceleration[0]
+                velocity =infos[agent_id]['env_obs'].ego_vehicle_state.linear_velocity
+                acceleration = infos[agent_id]['env_obs'].ego_vehicle_state.linear_acceleration
+                jerk = np.linalg.norm(infos[agent_id]['env_obs'].ego_vehicle_state.linear_jerk)
+                speed = np.linalg.norm(velocity)
+                acceleration = self._get_directional_acceleration(velocity, acceleration)
+                
                 dt = infos[agent_id]['env_obs'].dt
                 travel_distance = infos[agent_id]['env_obs'].distance_travelled
                 is_waiting = (speed < 0.1)
@@ -447,6 +461,7 @@ class MultiAgentTrainerParallel:
                     agent_id,
                     speed=speed,
                     acceleration=acceleration,
+                    jerk=jerk,
                     dt=dt,
                     travel_distance=travel_distance,
                     is_waiting=is_waiting,
@@ -459,17 +474,24 @@ class MultiAgentTrainerParallel:
                     data_collector.mark_agent_succeeded(agent_id, id)
         for social_traffic in infos["social_traffic"]:
             data_collector.add_social_vehicle(social_traffic["id"], id)
+            velocity = social_traffic["linear_velocity"]
+            acceleration = social_traffic["linear_acceleration"]
+            jerk = np.linalg.norm(social_traffic["linear_jerk"])
+            speed = np.linalg.norm(velocity)
+            acceleration = self._get_directional_acceleration(velocity, acceleration)
+
             data_collector.record_agent_data(
                     social_traffic["id"],
-                    speed=social_traffic["speed"],
-                    acceleration=social_traffic["linear_acceleration"][0],
+                    speed=speed,
+                    acceleration=acceleration,
+                    jerk=jerk,
                     dt=social_traffic["dt"],
                     travel_distance=social_traffic["travel_distance"],
                     is_waiting=(social_traffic["speed"] < 0.1),
                     scenario_id=id
                 )
 
-    def full_eval(self, parallel = True):
+    def collect_statistics(self, parallel = True):
         eval_episodes = len(self.scenarios)
         self.evaluate = True
         all_rewards = []

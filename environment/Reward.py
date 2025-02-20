@@ -68,6 +68,8 @@ class Reward(gym.Wrapper):
             info['social_traffic'].append({
                 'id': vehicle.id,
                 'speed': vehicle.speed,
+                'linear_velocity': vehicle.state.linear_velocity,
+                'linear_jerk': linear_jerk,
                 'linear_acceleration': linear_acc,
                 'dt': self.env.env.smarts.last_dt,
                 'travel_distance': 0,  # Placeholder for missing info
