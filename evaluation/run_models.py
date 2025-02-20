@@ -23,4 +23,4 @@ if __name__ == '__main__':
         base_dir='models/DuelingDDQNAgents/04012025',
         evaluation=True
     )
-    trainer.full_eval()
+    trainer.collect_statistics()

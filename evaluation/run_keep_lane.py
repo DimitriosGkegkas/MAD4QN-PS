@@ -8,7 +8,7 @@ from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 
 class MultiAgentTrainer_v1 (MultiAgentTrainerParallel):
     def act(self, observation, turning_intention):
-        return 0
+        return (0.0, 0.0)
 
 
 if __name__ == '__main__':
@@ -22,8 +22,8 @@ if __name__ == '__main__':
     trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='keepLane')
     trainer.initialize_environment(
         AgentSpec(
-            interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
+            interface=AgentInterface.from_type(AgentType.Direct, max_episode_steps=None, top_down_rgb=True),
         )
     )
-    trainer.full_eval(parallel=True)
+    trainer.collect_statistics(parallel=True)
 

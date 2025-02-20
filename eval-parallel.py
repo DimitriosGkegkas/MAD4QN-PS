@@ -23,5 +23,5 @@ if __name__ == '__main__':
         base_dir='models1',
         evaluation=True
     )
-    # trainer.full_eval(parallel=True)
+    # trainer.collect_statistics(parallel=True)
     test, test1 = trainer._envision_episode(1)

@@ -48,6 +48,6 @@ if __name__ == '__main__':
             interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
         )
     )
-    trainer.full_eval(parallel=True)
+    trainer.collect_statistics(parallel=True)
     # test, test = trainer._envision_episode(30)
 

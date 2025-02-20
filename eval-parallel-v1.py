@@ -21,7 +21,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainer_v1(args, num_env=27, algorithm_identifier='DuelingDDQNAgents-v1')
+    trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='DuelingDDQNAgents-v1')
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     )
     # test, test1 = trainer._envision_episode(1)
 
-    trainer.full_eval(parallel=True)
+    trainer.collect_statistics(parallel=True)
 
     # exit the program
     exit(0)
