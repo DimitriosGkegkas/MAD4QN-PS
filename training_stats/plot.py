@@ -1,96 +1,109 @@
 import numpy as np
 import os
-import time
-import subprocess
 import matplotlib.pyplot as plt
+from datetime import datetime
+import os
 
-# Remote server details
-REMOTE_USER = "gkegkas"
-REMOTE_HOST = "dgx-01.tail4ddd5c.ts.net"
 
-# Remote directories containing both sets of files
-REMOTE_LEARNING_CURVE_DIRS = {
-    "DuelingDDQN_1": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents9/12022025/",
-    "DuelingDDQN_2": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents91/12022025/",
-    "DuelingDDQN_3": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents/12022025/",
-    "DuelingDDQN_4": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents1/12022025/",
-    "DuelingDDQN_5": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents92/12022025/",
-    "DuelingDDQN_6": "/home/gkegkas/Research/MAD4QN-PS/models/DuelingDDQNAgents93/12022025/",
-}
+# Define the base directory
+base_dir = "training_stats"
 
-REMOTE_REWARD_DIRS = {
-    "DuelingDDQN_1": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents9/12022025/",
-    "DuelingDDQN_2": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents91/12022025/",
-    "DuelingDDQN_3": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents/12022025/",
-    "DuelingDDQN_4": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents1/12022025/",
-    "DuelingDDQN_5": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents92/12022025/",
-    "DuelingDDQN_6": "/home/gkegkas/Research/MAD4QN-PS/training_stats/DuelingDDQNAgents93/12022025/",
-}
+# Model names
+# models = [ "decay-preload", "decay-v1" , "decay-v2", "DuelingDDQNAgents92", "DuelingDDQNAgents-v1" ]
+models = [ "decay-preload", "decay-v1" , "test", ]
 
-# The specific file names
-LEARNING_CURVE_FILE = "agent_straight_0_learning_curve.npy"
-REWARD_FILE = "avg_reward.npy"
 
-# Local directory to store fetched files
-LOCAL_PATH = "remote_models/"
-os.makedirs(LOCAL_PATH, exist_ok=True)
+# Function to get the latest date folder
+def get_latest_folder(model_name):
+    model_path = os.path.join(base_dir, model_name)
+    if not os.path.exists(model_path):
+        return None
+    
+    # Get all folder names that look like a date
+    date_folders = [
+        f for f in os.listdir(model_path) if os.path.isdir(os.path.join(model_path, f))
+    ]
 
-# Create a figure for learning curves
-fig1, axs1 = plt.subplots(3, 2, figsize=(12, 8))  # 2x2 grid for 4 models
-fig1.suptitle("Downsampled Learning Curve Comparison")
+    if not date_folders:
+        return None
 
-# Create a figure for avg rewards
-fig2, axs2 = plt.subplots(3, 2, figsize=(12, 8))  # 2x2 grid for 4 models
-fig2.suptitle("Average Reward Comparison")
-
-for i, (name, _) in enumerate(REMOTE_LEARNING_CURVE_DIRS.items()):
-    # Load learning curve data
-    learning_file_path = os.path.join(LOCAL_PATH, f"{name}_learning.npy")
-    if os.path.exists(learning_file_path):
+    # Convert folder names from DDMMYYYY to actual datetime objects
+    def parse_date(folder_name):
         try:
-        
-            data = np.load(learning_file_path, allow_pickle=True)
-            if data is not None and len(data) > 0:
-                loss_values = [d["loss"] for d in data if d is not None]
-                epsilon_values = [d["epsilon"] for d in data if d is not None]
+            return datetime.strptime(folder_name, "%d%m%Y")
+        except ValueError:
+            return None  # Ignore folders that are not in DDMMYYYY format
 
-                # Apply downsampling (every 50 steps)
-                loss_downsampled = loss_values
-                epsilon_downsampled = epsilon_values
+    date_folders = [f for f in date_folders if parse_date(f) is not None]  # Filter valid dates
+    date_folders.sort(key=lambda x: parse_date(x), reverse=True)  # Sort by date (latest first)
 
-                # Select subplot for learning curve
-                ax1 = axs1[i // 2, i % 2]
-                ax1.plot(loss_downsampled, label="Loss (Downsampled)", alpha=0.5)
-                ax1.plot(epsilon_downsampled, label="Epsilon (Downsampled)", alpha=0.5)
+    if not date_folders:
+        return None
 
-                ax1.set_title(f"{name} (Downsampled Learning Curve)")
-                ax1.set_xlabel("Timesteps (Downsampled)")
-                ax1.set_ylabel("Value")
-                ax1.legend()
-        except Exception as e:
-            print(e)
-            print("Error in loading data")
+    latest_folder = date_folders[0]  # Pick the latest date folder
+    print(f"Latest folder for {model_name}: {latest_folder}")
+    return os.path.join(model_path, latest_folder)
 
-    # Load reward data
-    reward_file_path = os.path.join(LOCAL_PATH, f"{name}_reward.npy")
-    if os.path.exists(reward_file_path):
-        try:
-            reward_data = np.load(reward_file_path, allow_pickle=True)
-            if reward_data is not None and len(reward_data) > 0:
-                # pad reward_data to have the same length 200
-                reward_data = np.pad(reward_data, ((0, 200 - len(reward_data)), (0, 0)), mode="constant")
-                # Select subplot for rewards
-                ax2 = axs2[i // 2, i % 2]
-                ax2.plot([reward[0] for reward in reward_data], label="Avg Reward", color="tab:orange")
-                ax2.set_title(f"{name} (Average Reward)")
-                ax2.set_xlabel("Timesteps")
-                ax2.set_ylabel("Reward")
-                ax2.legend()
-        except Exception as e:
-            print(e)
-            print("Error in loading data")
 
-# Display the plots
+# Function to downsample data
+def downsample_data(data, step_size=1000):
+    if len(data) < step_size:
+        return data  # Avoid downsampling if not enough data
+    return [np.mean(data[i:i+step_size]) for i in range(0, len(data), step_size)]
+
+# Collect data from each model
+reward_data = {}
+learning_curve_data = {}
+
+for model in models:
+    latest_folder = get_latest_folder(model)
+    if latest_folder:
+        reward_path = os.path.join(latest_folder, "avg_reward.npy")
+        learning_curve_path = os.path.join(latest_folder, "agent_straight_0_learning_curve.npy")
+
+        if os.path.exists(reward_path):
+            reward_data[model] = np.load(reward_path, allow_pickle=True)
+        if os.path.exists(learning_curve_path):
+            learning_curve_data[model] = np.load(learning_curve_path, allow_pickle=True)
+
+# Create subplots for each model
+fig, axes = plt.subplots(len(models), 2, figsize=(14, 5 * len(models)), constrained_layout=True)
+
+
+for i, model in enumerate(models):
+    if model in reward_data:
+        rdata = [r[0] for r in reward_data[model]]
+        axes[i, 0].plot(rdata, label=f"{model} - Reward", alpha=0.6)
+
+        # Add horizontal lines for min and max rewards
+        axes[i, 0].axhline(y=150, color='r', linestyle='--', label="Crash Reward (150)")
+        axes[i, 0].axhline(y=300, color='g', linestyle='--', label="Success Reward (300)")
+
+        axes[i, 0].set_xlabel("Episodes")
+        axes[i, 0].set_ylabel("Reward")
+        axes[i, 0].set_title(f"Reward Curve - {model}")
+        axes[i, 0].legend()
+        axes[i, 0].grid(True)
+
+    if model in learning_curve_data:
+        # Extract loss, epsilon, and steps
+        loss_values = [d["loss"] for d in learning_curve_data[model] if d is not None]
+        epsilon = [d["epsilon"] for d in learning_curve_data[model] if d is not None]
+        steps = [d["learn_step_counter"] for d in learning_curve_data[model] if d is not None]
+        print(loss_values[:3])
+
+        # Plot loss and epsilon
+        axes[i, 1].plot(steps, loss_values, label=f"{model} - Loss", alpha=0.6)
+        axes[i, 1].plot(steps, epsilon, label=f"{model} - Epsilon", alpha=0.6)
+        axes[i, 1].plot(downsample_data(steps), downsample_data(loss_values), label=f"{model} - Downsampled Loss", linestyle="--")
+
+        axes[i, 1].set_xlabel("Episodes")
+        axes[i, 1].set_ylabel("Loss")
+        axes[i, 1].set_title(f"Loss & Epsilon Curve - {model}")
+        axes[i, 1].legend()
+        axes[i, 1].grid(True)
+
+# Adjust layout and show the plot
+# plt.tight_layout()
+# fig.subplots_adjust(hspace=0.4)
 plt.show()
-
-# Update every 30 seconds

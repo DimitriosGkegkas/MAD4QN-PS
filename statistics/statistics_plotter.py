@@ -1,15 +1,24 @@
+from itertools import accumulate
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+from statistics.experiment_data_collector import ExperimentDataCollector
+
 
 class StatisticsPlotter:
-    def __init__(self):
+    def __init__(self, algorithm_identifier=None):
         """
         Initialize the plotter with storage for algorithm results.
         """
         self.results = {}  # Store statistics by algorithm identifier
+        self.dataCollector = None
+        
+        if(algorithm_identifier is not None):
+            self.algorithm_identifier = algorithm_identifier
+            self.dataCollector = ExperimentDataCollector(algorithm_identifier)
+            self.dataCollector.load_raw_data()
 
     def add_algorithm(self, algorithm_identifier, date=None):
         """
@@ -17,30 +26,10 @@ class StatisticsPlotter:
         :param algorithm_identifier: Name of the algorithm.
         :param date: Optional date in DDMMYYYY format. Defaults to the most recent.
         """
-        base_dir = "data"
-        algorithm_dir = os.path.join(base_dir, algorithm_identifier)
-
-        if not os.path.exists(algorithm_dir):
-            raise ValueError(f"No data found for algorithm '{algorithm_identifier}'.")
-
-        # Find the most recent date folder if none is specified
-        if date is None:
-            dates = [
-                d for d in os.listdir(algorithm_dir) if os.path.isdir(os.path.join(algorithm_dir, d))
-            ]
-            if not dates:
-                raise ValueError(f"No date folders found for algorithm '{algorithm_identifier}'.")
-            date = max(dates, key=lambda d: datetime.strptime(d, "%d%m%Y"))  # Most recent date
-
-        # Load the total.npy file
-        data_dir = os.path.join(algorithm_dir, date)
-        total_file = os.path.join(data_dir, "total.npy")
-
-        if not os.path.exists(total_file):
-            raise ValueError(f"No 'total.npy' file found for algorithm '{algorithm_identifier}' on date '{date}'.")
-
+        dataCollector = ExperimentDataCollector(algorithm_identifier)
+        dataCollector.load_raw_data(date=date)
         # Load statistics and store
-        self.results[algorithm_identifier] = np.load(total_file, allow_pickle=True).item()
+        self.results[algorithm_identifier] = dataCollector.get_avg_statistics()
 
     def _save_figure(self, figure, name, algorithms):
         """
@@ -68,8 +57,8 @@ class StatisticsPlotter:
         Plot travel time and waiting time as grouped bar plots for all added algorithms.
         """
         algorithms = list(self.results.keys())
-        travel_times = [self.results[algo].get("average_travel_time", 0) for algo in algorithms]
-        waiting_times = [self.results[algo].get("average_waiting_time", 0) for algo in algorithms]
+        travel_times = [self.results[algo].get("travel_time", 0) for algo in algorithms]
+        waiting_times = [self.results[algo].get("waiting_time", 0) for algo in algorithms]
 
         # Create a bar plot
         x = np.arange(len(algorithms))
@@ -122,7 +111,7 @@ class StatisticsPlotter:
         Plot fuel consumption (energy) as bar plots for all added algorithms.
         """
         algorithms = list(self.results.keys())
-        fuel_consumptions = [self.results[algo].get("average_energy_consumption", 0) for algo in algorithms]
+        fuel_consumptions = [self.results[algo].get("energy_consumption", 0) for algo in algorithms]
 
         # Create a bar plot
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -130,6 +119,7 @@ class StatisticsPlotter:
         ax.set_title('Fuel Consumption Comparison', fontsize=22)
         ax.set_ylabel('Energy Consumption (Wh)', fontsize=18)
         ax.set_xlabel('Algorithm')
+        ax.set_ylim(min(fuel_consumptions) - 50, max(fuel_consumptions) + 50)
         plt.grid(axis='y')
 
         # Save and show
@@ -141,8 +131,8 @@ class StatisticsPlotter:
         Plot average speed and acceleration as grouped bar plots for all added algorithms.
         """
         algorithms = list(self.results.keys())
-        avg_speeds = [self.results[algo].get("average_speed", 0) for algo in algorithms]
-        avg_accelerations = [self.results[algo].get("average_acceleration", 0) for algo in algorithms]
+        avg_speeds = [self.results[algo].get("speed", 0) for algo in algorithms]
+        avg_accelerations = [self.results[algo].get("acceleration", 0) for algo in algorithms]
 
         # Create a bar plot
         x = np.arange(len(algorithms))
@@ -168,16 +158,20 @@ class StatisticsPlotter:
         algorithms = list(self.results.keys())
         plt.rcParams.update({'xtick.labelsize': 18, 'ytick.labelsize': 18})
 
-        travel_times = [self.results[algo].get("average_travel_time", 0) for algo in algorithms]
-        waiting_times = [self.results[algo].get("average_waiting_time", 0) for algo in algorithms]
+        travel_times = [self.results[algo].get("travel_time", 0) for algo in algorithms]
+        waiting_times = [self.results[algo].get("waiting_time", 0) for algo in algorithms]
         success_rates = [self.results[algo].get("success_rate", 0) for algo in algorithms]
         crash_rates = [self.results[algo].get("crash_rate", 0) for algo in algorithms]
         incomplete_rates = [self.results[algo].get("incomplete_rate", 0) for algo in algorithms]
-        fuel_consumptions = [self.results[algo].get("average_energy_consumption", 0) for algo in algorithms]
-        avg_speeds = [self.results[algo].get("average_speed", 0) for algo in algorithms]
-        avg_accelerations = [self.results[algo].get("average_acceleration", 0) for algo in algorithms]
+        fuel_consumptions = [self.results[algo].get("energy_consumption", 0) for algo in algorithms]
+        avg_speeds = [self.results[algo].get("speed", 0) for algo in algorithms]
+        avg_accelerations = [self.results[algo].get("acceleration", 0) for algo in algorithms]
+        avg_absolute_jerk = [self.results[algo].get("absolute_jerk", 0) for algo in algorithms]
+        avg_absolute_acceleration = [self.results[algo].get("absolute_acceleration", 0) for algo in algorithms]
 
-        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
+        fig, axs = plt.subplots(3, 2, figsize=(30, 10))
+        
+        plt.subplots_adjust(hspace=1, wspace=0.3)
 
         # Top Left: Travel Time and Waiting Time
         x = np.arange(len(algorithms))
@@ -205,6 +199,7 @@ class StatisticsPlotter:
         axs[1, 0].set_title('Energy Consumption', fontsize=22)
         axs[1, 0].set_ylabel('Average Energy Consumption (Wh/Km)', fontsize=18)
         axs[1, 0].set_xlabel('Algorithm')
+        axs[1, 0].set_ylim(min(fuel_consumptions), max(fuel_consumptions) )
 
         # Bottom Right: Speed and Acceleration
         # Bar for Average Speed on the left y-axis
@@ -222,15 +217,75 @@ class StatisticsPlotter:
         ax2.set_ylabel('Average Acceleration (m/s²)', color='coral', fontsize=18)
         ax2.tick_params(axis='y', labelcolor='coral',labelsize=18)
 
-        # Add a combined legend
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        # ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+        # Bottom Center: Absolute Jerk
+        axs[2, 1].bar(algorithms, avg_absolute_jerk, color='purple', label='Average Absolute Jerk')
+        axs[2, 1].bar(algorithms, avg_absolute_acceleration, color='orange', bottom=avg_absolute_jerk, label='Average Absolute Acceleration')
+
+        axs[2, 1].set_xlabel('Algorithm', fontsize=14)
+        axs[2, 1].set_ylabel('Passenger Comfort Metric (|a| + |Jerk|)', fontsize=14)
+        axs[2, 1].set_title('Passenger Comfort Analysis: Absolute Acceleration & Jerk', fontsize=18)
+
+        
+        axs[2, 1].legend(fontsize=18)
+        
         for ax in axs.flat:
             ax.tick_params(axis='x', labelsize=12, rotation=45) 
 
-        plt.tight_layout()
+        # plt.tight_layout()
 
         # Save and show
+        fig.set_size_inches(16, 20)  # Manually adjust figure size
         self._save_figure(fig, "combined_statistics", algorithms)
+        
         plt.show()
+
+
+
+    def plot_agent_motion(self, agent_id, scenario_id):
+        """
+        Plot the acceleration, velocity, and energy consumption of a given agent over time in subplots.
+
+        :param agent_id: Unique identifier for the agent
+        :param scenario_id: Identifier for the scenario
+        """
+    
+        
+        accelerations = self.dataCollector.get_acceleration_time_series(agent_id, scenario_id)
+        velocities = self.dataCollector.get_speed_time_series(agent_id, scenario_id)
+        energy_consumption , total_consumption = self.dataCollector.get_energy_consumption_time_series(agent_id, scenario_id)
+        dt = self.dataCollector.get_time_step(agent_id, scenario_id)
+        print(dt)
+        print(self.dataCollector.get_total_distance(agent_id, scenario_id))
+        
+        time = list(accumulate(dt))
+
+
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 12), sharex=True)
+        
+        # add grid title the self.algorithm_identifier
+        fig.suptitle(self.algorithm_identifier)
+        
+
+        # Plot acceleration
+        axes[0].plot(time, accelerations, marker='o', linestyle='-', color='b', label="Acceleration")
+        axes[0].set_ylabel("Acceleration (m/s²)")
+        axes[0].set_title(f"Acceleration, Velocity, and Energy Consumption of Agent {agent_id} Over Time")
+        axes[0].legend()
+        axes[0].grid(True)
+
+        # Plot velocity
+        axes[1].plot(time, velocities, marker='s', linestyle='-', color='r', label="Velocity")
+        axes[1].set_ylabel("Velocity (m/s)")
+        axes[1].legend()
+        axes[1].grid(True)
+
+        # Plot energy consumption
+        axes[2].plot(time, energy_consumption, marker='d', linestyle='-', color='g', label="Energy Consumption")
+        axes[2].set_xlabel("Time Step")
+        axes[2].set_ylabel("Energy Consumption (kWh)")
+        axes[2].set_title(f"Total energy consumption: {total_consumption, sum(energy_consumption)} kWh/km")
+        axes[2].legend()
+        axes[2].grid(True)
+        
+
+        plt.show(block=False)

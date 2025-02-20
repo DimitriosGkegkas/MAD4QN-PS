@@ -29,4 +29,4 @@ if __name__ == '__main__':
     )
     # trainer.train()
     trainer._envision_episode(20)
-    # trainer.full_eval(parallel=True)
+    # trainer.collect_statistics(parallel=True)

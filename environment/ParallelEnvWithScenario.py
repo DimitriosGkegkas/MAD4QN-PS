@@ -327,6 +327,7 @@ def _worker(
                 pipe.send((_Message.RESULT, (observation, info)))
             elif message == _Message.STEP:
                 observation, reward, terminated, truncated, info = env.step(payload)
+                # TODO at some point I can check if there are less than 4 cars and end the simulation (reset it) to move on if I want oto have async.
                 if terminated["__all__"] and auto_reset:
                     # Final observation can be obtained from `info` as follows:
                     # `final_obs = info[agent_id]["env_obs"]`

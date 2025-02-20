@@ -8,22 +8,21 @@ import matplotlib.pyplot as plt
 from utils.debug import debug_save_any_img
 
 class DuelingDDQNAgent():
-    def __init__(self, gamma, epsilon, lr, n_actions, input_dims, mem_size, batch_size, eps_min=0.01, eps_dec=5e-7,
-                 replace=1000, algo=None, env_name=None, chkpt_dir='tmp/dqn'):
+    def __init__(self, gamma, lr, n_actions, input_dims, mem_size, batch_size, epsilon_decay_cycle_length=1000, Tmax=1.0, Tmin=0.1, omega=1.0,
+                 replace=1000, algo=None, env_name=None, chkpt_dir='tmp/dqn', training_stats_path='tmp/dqn_stats'):
         self.gamma = gamma
-        self.epsilon = epsilon
         self.lr = lr
         self.n_actions = n_actions
         self.input_dims = input_dims
         self.batch_size = batch_size
-        self.eps_min = eps_min
-        self.eps_dec = eps_dec
         self.replace_target_cnt = replace
         self.algo = algo
         self.env_name = env_name
         self.chkpt_dir = chkpt_dir
+        self.training_stats_path = training_stats_path
         self.action_space = [i for i in range(self.n_actions)]
         self.learn_step_counter = 0
+        self.total_steps = 0
         available_gpus = getAvailable(order='memory', limit=1)  # Get the best GPU by memory
         if available_gpus:
             self.device = T.device(f'cuda:{available_gpus[0]}')
@@ -38,26 +37,61 @@ class DuelingDDQNAgent():
         self.q_next = DuelingDQNetwork(self.lr, self.n_actions, input_dims=self.input_dims, name=self.env_name+'_'+self.algo+'_q_next', chkpt_dir=self.chkpt_dir, device = self.device)
     
         self.learning_curve = []
+        
+        self.cycle_length = epsilon_decay_cycle_length # Length of the epsilon decay cycle
+        self.T = Tmax  # Initial temperature for the softmax distribution
+        self.Tmin = Tmin # Minimum temperature for the softmax distribution
+        self.Tmax = Tmax  # Maximum temperature for the softmax distribution
+        self.omega = omega  # Parameter for the Mellowmax function
+
+    def update_temperature(self):
+        """Cyclically updates the temperature using a cosine function."""
+        self.T = self.Tmin + (self.Tmax - self.Tmin) * (1 + np.cos(2 * np.pi * self.learn_step_counter / self.cycle_length)) / 2
+
+
+    def mellowmax(self, q_values):
+        """
+        Applies the Mellowmax function to Q-values.
+        :param q_values: List of action-value estimates (Q-values)
+        :return: Probabilities for action selection
+        """
+        max_Q = np.max(q_values)  # Stabilize exponentials
+        mellow_value = np.log(np.mean(np.exp(self.omega * (q_values - max_Q)))) / self.omega + max_Q
+        return mellow_value
 
 
     def choose_action(self, observation, evaluate=False):
-        if (np.random.random() > self.epsilon) or (evaluate):
-
-            observation_array = np.array(observation)
-            if observation_array.ndim == 3:  # Single observation of rgb image
-                observation_array = np.array([observation_array])
-                state = T.tensor(observation_array, dtype=T.float).to(self.q_eval.device)
-            else:  # Multiple observations of rgb images
-                state = T.tensor(observation_array, dtype=T.float).to(self.q_eval.device)
-            
-            self.q_eval.eval()
-            _, advantage = self.q_eval.forward(state)
+        """
+        Select an action based on Mellowmax Exploration with Cyclic Temperature Decay.
+        
+        :param observation: The current state observation.
+        :param evaluate: If True, selects the best action (exploitation).
+        :return: The chosen action.
+        """
+        observation_array = np.array(observation)
+        if observation_array.ndim == 3:
+            observation_array = np.array([observation_array])
+        state = T.tensor(observation_array, dtype=T.float).to(self.q_eval.device)
+        
+        self.q_eval.eval()
+        _, advantage = self.q_eval.forward(state)
+        
+        if evaluate:
+            # Exploitation: Choose the best action
             action = T.argmax(advantage, dim=-1).item()
         else:
-            action = np.random.choice(self.action_space)
+            # Convert Q-values into Mellowmax probability distribution
+            q_values = advantage.detach().cpu().numpy().squeeze()  # Convert (1, num_actions) → (num_actions)
+            mellow_val = self.mellowmax(q_values)
+            probabilities = np.exp(self.omega * (q_values - mellow_val))  # Soft assignment
+
+            # Normalize probabilities
+            probabilities /= np.sum(probabilities)
+
+            # Sample an action
+            action = np.random.choice(self.action_space, p=probabilities)
 
         return action
-
 
     def store_transition(self, state, action, reward, state_, done):
         self.memory.store_transition(state, action, reward, state_, done)
@@ -77,30 +111,63 @@ class DuelingDDQNAgent():
         if self.learn_step_counter % self.replace_target_cnt == 0:
             self.q_next.load_state_dict(self.q_eval.state_dict())
 
-    def decrement_epsilon(self):
-        self.epsilon = self.epsilon - self.eps_dec if self.epsilon > self.eps_min else self.eps_min
-
     def save_models(self):
         self.q_eval.save_checkpoint()
         self.q_next.save_checkpoint()
 
-    def load_models(self):
-        self.q_eval.load_checkpoint()
-        self.q_next.load_checkpoint()
+    def load_models(self, path = None):
+        self.q_eval.load_checkpoint(path)
+        self.q_next.load_checkpoint(path)
 
     def add_to_learning_curve(self, loss):
+        """ Store loss, epsilon, and steps with downsampling and efficient saving """
 
+        # Append new loss to temporary buffer
         self.learning_curve.append({
             'loss': loss,
-            'epsilon': self.epsilon,
-            'learn_step_counter': self.learn_step_counter
+            'epsilon': self.T,
+            'learn_step_counter': self.learn_step_counter,
+            'total_steps': self.total_steps
         })
 
-        # Save it to a file
-        if (self.learn_step_counter % 1000 == 0):
-            np.save(os.path.join(self.chkpt_dir, self.env_name + '_learning_curve.npy'), self.learning_curve, allow_pickle=True)
+        # Downsampling: Every 100 steps, store the averaged entry
+        if len(self.learning_curve) >= 100:
+            avg_loss = np.mean([entry['loss'] for entry in self.learning_curve])
+            avg_epsilon = np.mean([entry['epsilon'] for entry in self.learning_curve])
+            avg_step = self.learning_curve[-1]['learn_step_counter']
+            avg_total_steps = self.learning_curve[-1]['total_steps']
+
+            avg_entry = {
+                'loss': avg_loss,
+                'epsilon': avg_epsilon,
+                'learn_step_counter': avg_step,
+                'total_steps': avg_total_steps
+            }
+
+            # Save the averaged entry
+            self.save_learning_curve(avg_entry)
+
+            # Clear buffer
+            self.learning_curve = []
+
+    def save_learning_curve(self, entry):
+        """ Append data to file instead of storing everything in memory """
+        file_path = os.path.join(self.training_stats_path, self.env_name + '_learning_curve.npy')
+
+        # If file exists, load existing data, append new entry, and save
+        if os.path.exists(file_path):
+            existing_data = list(np.load(file_path, allow_pickle=True))
+        else:
+            existing_data = []
+
+        existing_data.append(entry)
+
+        # Save the updated data
+        np.save(file_path, existing_data, allow_pickle=True)
+
 
     def learn(self):
+        self.total_steps += 1 
         # Check if there are enough experiences in memory to sample a batch for training
         if self.memory.mem_cntr < self.batch_size:
             return  # Exit if not enough samples
@@ -156,10 +223,7 @@ class DuelingDDQNAgent():
 
         # Increment the learning step counter
         self.learn_step_counter += 1
+        self.update_temperature()  # Update temperature before selecting action
 
         # add the avg loss to the learning curve
         self.add_to_learning_curve(T.mean(loss).item())
-
-        # Gradually reduce epsilon to decrease the exploration rate over time
-        self.decrement_epsilon()
-

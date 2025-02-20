@@ -12,21 +12,23 @@ class ElectricVehicleEnergyModel:
         self.c1 = vehicle_params["c1"]  # Rolling resistance speed coefficient
         self.c2 = vehicle_params["c2"]  # Rolling resistance constant coefficient
         self.rho_air = vehicle_params["rho_air"]  # Air density [kg/m^3]
-        self.A_f = vehicle_params["A_f"] # Frontal area [m^2]
+        self.A_f = vehicle_params["A_f"]  # Frontal area [m^2]
         self.C_d = vehicle_params["C_d"]  # Drag coefficient
         self.eta_driveline = vehicle_params["eta_driveline"]  # Driveline efficiency
         self.eta_motor = vehicle_params["eta_motor"]  # Motor efficiency
         self.alpha = vehicle_params["alpha"]  # Regenerative braking efficiency parameter
         self.energy_consumption = 0.0  # Total energy consumption [J]
         self.total_distance = 0.0  # Total distance traveled [m]
-    
+        self.energy_history = []  # List to track energy consumption over time
+
     def clear_data(self):
         """
-        Reset the energy consumption and distance for a new simulation.
+        Reset the energy consumption, distance, and history for a new simulation.
         """
         self.energy_consumption = 0.0
         self.total_distance = 0.0
-    
+        self.energy_history = []  # Reset energy history
+
     def compute_regenerative_braking_efficiency(self, acceleration):
         """
         Calculate the regenerative braking efficiency based on acceleration.
@@ -34,7 +36,7 @@ class ElectricVehicleEnergyModel:
         if acceleration < 0:
             return math.exp(-self.alpha * abs(acceleration))
         return 0.0
-    
+
     def process_time_step(self, velocity, acceleration, time_step):
         """
         Process a single time step to compute power at the wheels and motor, and update total energy consumption.
@@ -47,9 +49,9 @@ class ElectricVehicleEnergyModel:
         aerodynamic_drag = 0.5 * self.rho_air * self.A_f * self.C_d * velocity**2
         slope_force = 0  # Assuming flat road; include mg * sin(theta) if grade is considered
         inertial_force = self.mass * acceleration
-        
+
         power_wheels = (inertial_force + rolling_resistance + aerodynamic_drag + slope_force) * velocity
-        
+
         # Calculate power at the motor
         if power_wheels > 0:  # Traction mode
             power_motor = power_wheels / (self.eta_driveline * self.eta_motor)
@@ -57,18 +59,26 @@ class ElectricVehicleEnergyModel:
             eta_rb = self.compute_regenerative_braking_efficiency(acceleration)
             power_motor = power_wheels * self.eta_driveline * self.eta_motor * eta_rb
 
-        
-        
-        # Update energy consumption
-        self.energy_consumption += power_motor * time_step  # Integrate over time
+        # Convert power to energy and update total consumption
+        energy_step = power_motor * time_step / 3600  # Convert J to Wh
+        self.energy_consumption += energy_step
         self.total_distance += velocity * time_step  # Update total distance traveled
-        return power_motor / 3600, self.total_distance
-    
+
+        # Save energy consumption per time step
+        self.energy_history.append(energy_step)
+
+        return energy_step, self.total_distance
+
     def get_energy_consumption_per_km(self):
         """
-        Compute and return energy consumption per kilometer in Wh/km.
+        Compute and return energy consumption per kilometer in kWh/km.
         """
         if self.total_distance == 0:
             return 0.0  # Avoid division by zero
-        energy_in_wh = self.energy_consumption / 3600  # Convert J to Wh
-        return energy_in_wh / (self.total_distance / 1000)  # Convert m to km
+        return (self.energy_consumption / 1000)/ (self.total_distance / 1000)  # Convert m to km
+
+    def get_energy_consumption_history(self):
+        """
+        Return the recorded energy consumption history.
+        """
+        return self.energy_history

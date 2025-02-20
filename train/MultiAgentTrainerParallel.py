@@ -20,7 +20,8 @@ class MultiAgentTrainerParallel:
         agent_count=4,
         algorithm_identifier='DuelingDDQNAgents',
         evaluation_step=10,
-        num_env = 1
+        num_env = 1,
+        evaluation = False,
     ):
         self.args = args
         self.batch_size = batch_size
@@ -36,9 +37,17 @@ class MultiAgentTrainerParallel:
         self.num_env = num_env
         
         self.algorithm_identifier = algorithm_identifier
-        self.evaluate = False
+        self.evaluate = evaluation
         self.timestamp = datetime.now().strftime("%d%m%Y")
         self.agents = {}
+        self.training_stats_path = None
+        if not self.evaluate:
+            self.training_stats_path = os.path.join(
+                    "training_stats",
+                    self.algorithm_identifier,
+                    self.timestamp,
+            )
+            os.makedirs(self.training_stats_path, exist_ok=True)
 
     def initialize_environment(self, agent_spec, scenario_subdir="scenarios/sumo/multi_scenario", parallel=True):
         torch.manual_seed(self.args.seed)
@@ -58,21 +67,20 @@ class MultiAgentTrainerParallel:
 
     def initialize_agents(
         self,
+        Tmax=1.0,
+        Tmin=0.1,
+        omega=1.0,
+        epsilon_decay_cycle_length=1000,
         batch_size=256,
         gamma=0.99,
-        epsilon=1.0,
         lr=0.0001,
-        eps_min=0.01,
         replace=1000,
-        eps_dec=1e-6,
         mem_size_factor=1.5,
         n_actions=2,
         base_dir='models',
-        evaluation = False,
-        preload = False
     ):
-        mem_size = 1 if evaluation else 1e5
-        if evaluation or preload:
+        mem_size = 1 if self.evaluate else 1e5
+        if self.evaluate:
             chkpt_dir = base_dir
             assert os.path.exists(chkpt_dir), f"Checkpoint directory {chkpt_dir} does not exist"
         else:
@@ -81,22 +89,22 @@ class MultiAgentTrainerParallel:
             )
             os.makedirs(chkpt_dir, exist_ok=True)
 
-        self.evaluate = evaluation
-
         input_dims = self.env.observation_space.shape
         agent_params = {
+            'Tmax': Tmax,
+            'Tmin': Tmin,
+            'omega': omega,
+            'epsilon_decay_cycle_length': epsilon_decay_cycle_length,
             'gamma': gamma,
-            'epsilon': epsilon,
             'lr': lr,
             'input_dims': input_dims,
             'n_actions': n_actions,
-            'eps_min': eps_min,
             'batch_size': batch_size,
             'replace': replace,
-            'eps_dec': eps_dec,
             'chkpt_dir': chkpt_dir,
             'algo': self.algorithm_identifier,
             'mem_size': int(mem_size * mem_size_factor),
+            'training_stats_path': self.training_stats_path
         }
         self.agents = {
             'straight': DuelingDDQNAgent(
@@ -113,15 +121,15 @@ class MultiAgentTrainerParallel:
             )
         }
 
-        if evaluation or preload:
-            self.load_models()
 
-        if preload:
+    def preload(self, path):
+        self.load_models(path)
+        if(not self.evaluate):
             self._set_best_score()
 
-    def load_models(self):
+    def load_models(self, path):
         for agent in self.agents.values():
-            agent.load_models()
+            agent.load_models(path)
 
     def train(self):
         while self.n_steps < self.total_steps:
@@ -152,7 +160,7 @@ class MultiAgentTrainerParallel:
             batch_observations = batch_observations_
             self.n_steps += 1
             ep_steps += 1
-            self._log_progress(np.average(batch_score), ep_steps)
+            self._log_progress(np.mean(batch_score), ep_steps)
         self.n_episodes += 1
         self._evaluate_if_needed()
         
@@ -275,7 +283,7 @@ class MultiAgentTrainerParallel:
         if self.n_episodes % self.evaluation_step == 0:
             scores, scores_per_scenario = self.eval()
             elapsed_time = datetime.now() - self.start_time 
-            self.scores_list.append((scores, str(elapsed_time)))
+            self.scores_list.append((scores, str(elapsed_time), self.n_steps))
             self.scores_per_scenario_list.append(scores_per_scenario)
             if scores > self.best_score:
                 for agent in self.agents.values():
@@ -284,40 +292,13 @@ class MultiAgentTrainerParallel:
             self.save_scores()
 
     def save_scores(self):
-        reward_path = os.path.join(
-                "training_stats",
-                self.algorithm_identifier,
-                self.timestamp,
-        )
-        os.makedirs(reward_path, exist_ok=True)
-        avg_reward_path = os.path.join(
-                reward_path, 
-                "avg_reward.npy"
-            )
-        avg_reward_per_scenario_path = os.path.join(
-                reward_path, 
-                "avg_reward_per_scenario.npy"
-            )
-        np.save(avg_reward_path, np.array(self.scores_list, dtype=object))
-        np.save(avg_reward_per_scenario_path, np.array(self.scores_per_scenario_list))
+        np.save(os.path.join(self.training_stats_path, "avg_reward.npy"), np.array(self.scores_list, dtype=object))
+        np.save(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), np.array(self.scores_per_scenario_list))
 
     def load_scores(self):
-        reward_path = os.path.join(
-                "training_stats",
-                self.algorithm_identifier,
-                self.timestamp,
-        )
-        avg_reward_path = os.path.join(
-                reward_path, 
-                "avg_reward.npy"
-            )
-        avg_reward_per_scenario_path = os.path.join(
-                reward_path, 
-                "avg_reward_per_scenario.npy"
-            )
         try:
-            self.scores_list = np.load(avg_reward_path, allow_pickle=True).tolist()
-            self.scores_per_scenario_list = np.load(avg_reward_per_scenario_path, allow_pickle=True).tolist()
+            self.scores_list = np.load(os.path.join(self.training_stats_path, "avg_reward.npy"), allow_pickle=True).tolist()
+            self.scores_per_scenario_list = np.load(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), allow_pickle=True).tolist()
         except:
             self.scores_list = []
             self.scores_per_scenario_list = []
@@ -411,7 +392,7 @@ class MultiAgentTrainerParallel:
             test1.append({agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()})
             ep_steps += 1
         self.evaluate = True
-        print(f"Finished envisioning episode because ")
+        print(f"Finished envisioning episode")
         return  test, test1
 
     
@@ -431,7 +412,7 @@ class MultiAgentTrainerParallel:
             )
             self._extract_scenario_data_batch(ids, batch_observations, batch_infos, data_collector)
             batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
-            self._log_progress(np.average(batch_score), ep_steps)
+            self._log_progress(np.mean(batch_score), ep_steps)
             ep_steps += 1
         data_collector.close_scenario()
         return batch_score
@@ -452,12 +433,26 @@ class MultiAgentTrainerParallel:
     def _extract_scenario_data_batch(self, ids, batch_observations, batch_infos, data_collector: ExperimentDataCollector):
         for id, observations, infos in zip(ids, batch_observations, batch_infos):
             self._extract_scenario_data(id, observations, infos, data_collector)
+            
+    def _get_directional_acceleration(self, linear_velocity, linear_acceleration):
+        speed = np.linalg.norm(linear_velocity)
+        if speed > 0:
+            velocity_direction = linear_velocity / speed
+        else:
+            velocity_direction = np.zeros_like(linear_velocity)
+        acceleration = np.dot(linear_acceleration, velocity_direction)
+        return acceleration
+        
 
     def _extract_scenario_data(self, id, observations, infos, data_collector:Union[ExperimentDataCollector]):
         for agent_id in self.agent_names:
             if agent_id in observations:
-                speed = infos[agent_id]['env_obs'].ego_vehicle_state.speed
-                acceleration = infos[agent_id]['env_obs'].ego_vehicle_state.linear_acceleration[0]
+                velocity =infos[agent_id]['env_obs'].ego_vehicle_state.linear_velocity
+                acceleration = infos[agent_id]['env_obs'].ego_vehicle_state.linear_acceleration
+                jerk = np.linalg.norm(infos[agent_id]['env_obs'].ego_vehicle_state.linear_jerk)
+                speed = np.linalg.norm(velocity)
+                acceleration = self._get_directional_acceleration(velocity, acceleration)
+                
                 dt = infos[agent_id]['env_obs'].dt
                 travel_distance = infos[agent_id]['env_obs'].distance_travelled
                 is_waiting = (speed < 0.1)
@@ -466,6 +461,7 @@ class MultiAgentTrainerParallel:
                     agent_id,
                     speed=speed,
                     acceleration=acceleration,
+                    jerk=jerk,
                     dt=dt,
                     travel_distance=travel_distance,
                     is_waiting=is_waiting,
@@ -478,25 +474,35 @@ class MultiAgentTrainerParallel:
                     data_collector.mark_agent_succeeded(agent_id, id)
         for social_traffic in infos["social_traffic"]:
             data_collector.add_social_vehicle(social_traffic["id"], id)
+            velocity = social_traffic["linear_velocity"]
+            acceleration = social_traffic["linear_acceleration"]
+            jerk = np.linalg.norm(social_traffic["linear_jerk"])
+            speed = np.linalg.norm(velocity)
+            acceleration = self._get_directional_acceleration(velocity, acceleration)
+
             data_collector.record_agent_data(
                     social_traffic["id"],
-                    speed=social_traffic["speed"],
-                    acceleration=social_traffic["linear_acceleration"][0],
+                    speed=speed,
+                    acceleration=acceleration,
+                    jerk=jerk,
                     dt=social_traffic["dt"],
                     travel_distance=social_traffic["travel_distance"],
                     is_waiting=(social_traffic["speed"] < 0.1),
                     scenario_id=id
                 )
 
-    def full_eval(self, parallel = True):
+    def collect_statistics(self, parallel = True):
         eval_episodes = len(self.scenarios)
         self.evaluate = True
-
+        all_rewards = []
         if parallel:
             data_collector = ExperimentDataCollector(self.algorithm_identifier)
             for ids in self.slice_list(list(range(eval_episodes)), self.num_env):
-                self._full_eval_episodes(ids, data_collector)
+                batch_rewards = self._full_eval_episodes(ids, data_collector)
+                all_rewards.extend(batch_rewards)
             data_collector.save_raw_data()
+            print(f'Finished evaluation in parallel')
+            print(f'Average reward: {np.mean(all_rewards):.3f}')
         else:
             data_collector = ExperimentDataCollector(self.algorithm_identifier)
             for id in range(eval_episodes):
@@ -504,3 +510,4 @@ class MultiAgentTrainerParallel:
             data_collector.save_raw_data()
         print(f'Finished evaluation')
         self.evaluate = False
+        return
