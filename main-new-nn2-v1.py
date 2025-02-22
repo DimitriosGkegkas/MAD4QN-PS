@@ -21,7 +21,7 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='DropOutLayer2-v1',evaluation_step=10, evaluation=True)
+    trainer = MultiAgentTrainer_v1(args, num_env=1, algorithm_identifier='DropOutLayer2-v1',evaluation_step=10, evaluation=True)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
@@ -37,4 +37,5 @@ if __name__ == '__main__':
     trainer.preload("models/DropOutLayer2-v1/18022025")
     # trainer.train()
 
-    trainer.collect_statistics(parallel=True)
+    # trainer.collect_statistics(parallel=True)
+    trainer.envision(1)

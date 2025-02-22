@@ -22,7 +22,7 @@ if __name__ == '__main__':
     for baseline_algo in ["FTTL1", "FTTL2", "FTTLOPT", "ATL1", "ATL2", "Centralized"]:
     # for baseline_algo in ["FTTL1"]:
         scenario_subdir = scenarios_path_base / baseline_algo
-        trainer = MultiAgentTrainerParallel(args, num_env=9, agent_count=0, algorithm_identifier=baseline_algo)
+        trainer = MultiAgentTrainerParallel(args, num_env=1, agent_count=0, algorithm_identifier=baseline_algo)
         trainer.initialize_environment(
             agent_spec,
             scenario_subdir=scenario_subdir,

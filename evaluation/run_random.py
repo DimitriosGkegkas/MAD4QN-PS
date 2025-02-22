@@ -19,11 +19,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.headless = True
 
-    trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='random')
+    trainer = MultiAgentTrainer_v1(args, num_env=9, algorithm_identifier='random', evaluation=True)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
-        )
+        ),
+        parallel=True
     )
     trainer.collect_statistics(parallel=True)
 

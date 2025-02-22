@@ -37,9 +37,9 @@ class Observation(gym.ObservationWrapper):
         obs, info = self.env.reset(seed=seed, options=options)
         return self.observation(obs), info
 
-    def step(self, action, conflicts=None):
+    def step(self, action):
         """Modifies the :attr:`env` after calling :meth:`step` using :meth:`self.observation` on the returned observations."""
-        observation, reward, terminated, truncated, info = self.env.step(action, conflicts)
+        observation, reward, terminated, truncated, info = self.env.step(action)
         return self.observation(observation), reward, terminated, truncated, info
 
 

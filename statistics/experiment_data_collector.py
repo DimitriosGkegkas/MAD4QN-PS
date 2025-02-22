@@ -41,6 +41,7 @@ class ExperimentDataCollector:
                 "jerk": [],
                 "dt": [],
                 "waiting_time": 0,
+                "time_separation": np.inf,
                 "state": "traveling",  # Possible states: traveling, succeeded, crashed
             }
 
@@ -48,7 +49,7 @@ class ExperimentDataCollector:
         self.add_agent(agent_id, "social", scenario_id)
         self.mark_agent_succeeded(agent_id, scenario_id)
 
-    def record_agent_data(self, agent_id, speed, acceleration, jerk, dt, travel_distance, is_waiting = False, scenario_id = None):
+    def record_agent_data(self, agent_id, speed, acceleration, jerk, dt, travel_distance, time_separation, is_waiting = False, scenario_id = None):
         """
         Record speed, acceleration, and energy consumption for a given agent in the current scenario.
         :param agent_id: Unique identifier for the agent
@@ -74,6 +75,7 @@ class ExperimentDataCollector:
         agent_data["accelerations"].append(acceleration)
         agent_data["jerk"].append(jerk)
         agent_data["dt"].append(dt)
+        agent_data["time_separation"] = time_separation
 
         # Update travel and waiting times
         if is_waiting:
@@ -176,6 +178,11 @@ class ExperimentDataCollector:
         total_scenarios = len(self.scenarios)
         succeeded_scenarios = self.get_success_scenarios()
         crashed_scenarios = self.get_crashed_scenarios()
+        for index, scenario in enumerate(succeeded_scenarios):
+            for agent in scenario.values():
+                if (agent["time_separation"] < 0):
+                    print(index)
+        
         
         statistics = {
             "travel_time": np.mean([
@@ -212,6 +219,11 @@ class ExperimentDataCollector:
                 sum(agent["distance"])
                 for scenario in succeeded_scenarios
                 for agent in scenario.values()
+            ]),
+            "lack_of_confidence": np.mean([
+                np.exp(-0.5*min([max(agent["time_separation"],0) for agent in scenario.values()]))
+                for scenario in succeeded_scenarios
+                
             ]),
             "energy_consumption": np.mean(self.get_energy_consumption()),
             "success_rate": len(succeeded_scenarios) / total_scenarios * 100 if total_scenarios > 0 else 0,

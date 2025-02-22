@@ -6,6 +6,8 @@ from datetime import datetime
 
 from statistics.experiment_data_collector import ExperimentDataCollector
 
+import cv2
+import math
 
 class StatisticsPlotter:
     def __init__(self, algorithm_identifier=None):
@@ -168,6 +170,7 @@ class StatisticsPlotter:
         avg_accelerations = [self.results[algo].get("acceleration", 0) for algo in algorithms]
         avg_absolute_jerk = [self.results[algo].get("absolute_jerk", 0) for algo in algorithms]
         avg_absolute_acceleration = [self.results[algo].get("absolute_acceleration", 0) for algo in algorithms]
+        lack_of_confidence = [self.results[algo].get("lack_of_confidence", 0) for algo in algorithms]
 
         fig, axs = plt.subplots(3, 2, figsize=(30, 10))
         
@@ -224,9 +227,16 @@ class StatisticsPlotter:
         axs[2, 1].set_xlabel('Algorithm', fontsize=14)
         axs[2, 1].set_ylabel('Passenger Comfort Metric (|a| + |Jerk|)', fontsize=14)
         axs[2, 1].set_title('Passenger Comfort Analysis: Absolute Acceleration & Jerk', fontsize=18)
+        axs[2, 1].legend(fontsize=18)
+        
+        print(lack_of_confidence)
+        axs[2, 0].bar(algorithms, lack_of_confidence, color='red', label='Lack of Confidence')
+        axs[2, 0].set_title('Lack of Confidence', fontsize=22)
+        axs[2, 0].set_ylabel('Average Lack of Confidence', fontsize=18)
+        axs[2, 0].set_xlabel('Algorithm')
 
         
-        axs[2, 1].legend(fontsize=18)
+        axs[2, 0].legend(fontsize=18)
         
         for ax in axs.flat:
             ax.tick_params(axis='x', labelsize=12, rotation=45) 
@@ -289,3 +299,53 @@ class StatisticsPlotter:
         
 
         plt.show(block=False)
+        
+    def process_video(self, video_path, interval=0.5, cols=5, max_frames=20):
+        frames, timestamps = extract_frames(video_path, interval, max_frames)
+        rows = math.ceil(len(frames) / cols)
+        fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 3))
+        
+        if rows == 1:
+            axes = np.array([axes])  # Ensure axes is always 2D
+        
+        axes = axes.flatten()
+        
+        for ax, frame, timestamp in zip(axes, frames, timestamps):
+            ax.imshow(frame)
+            ax.set_title(timestamp)
+            ax.axis("off")
+        
+        # Hide any remaining empty subplots
+        for ax in axes[len(frames):]:
+            ax.axis("off")
+        
+        plt.tight_layout()
+        plt.show()
+
+
+
+def extract_frames(video_path, interval=0.5, max_frames=20):
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_interval = int(fps * interval)  # Convert time interval to frame count
+    frames = []
+    timestamps = []
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = frame_count / fps
+    
+    for i in range(0, frame_count, frame_interval):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB for matplotlib
+        frames.append(frame)
+        timestamps.append(f"{i / fps:.1f}s")
+        
+        if len(frames) >= max_frames:
+            break
+    
+    cap.release()
+    return frames, timestamps
+

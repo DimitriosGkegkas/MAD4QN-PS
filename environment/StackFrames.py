@@ -15,9 +15,9 @@ class StackFrames(gym.ObservationWrapper):
                       collections.deque(maxlen=repeat), collections.deque(maxlen=repeat)]
         self.agent_names = agent_names
 
-    def step(self, action, conflicts=None):
+    def step(self, action):
         """Modifies the :attr:`env` after calling :meth:`step` using :meth:`self.observation` on the returned observations."""
-        observation, reward, terminated, truncated, info = self.env.step(action, conflicts)
+        observation, reward, terminated, truncated, info = self.env.step(action)
         return self.observation(observation), reward, terminated, truncated, info
     def reset(self,
         *,

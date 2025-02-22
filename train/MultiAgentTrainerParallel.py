@@ -374,26 +374,28 @@ class MultiAgentTrainerParallel:
             batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
             ep_steps += 1
         return batch_score
+    def envision(self, id):
+        print("\n----------------------------------------------------------------------------")
+        print(f"Starting envisioning phase")
+        self.evaluate = True
+        self._envision_episode(id)
+        self.evaluate = False
+        print(f"Envisioning over {id} episode")
+        print("----------------------------------------------------------------------------")
+        return
     
     def _envision_episode(self, id):
+        self.evaluate = True
         turning_intentions, observations, terminated, truncated, rewards, info = self._initialize_episode(id)
         print(turning_intentions)
         ep_steps = 0
-        test = []
-        test1 = []
-        self.evaluate = True
         while (not self._is_episode_ended(observations, rewards, terminated, info)) or ep_steps < 1:
-            
             agent_actions = self._select_actions(turning_intentions, observations, terminated, truncated)
-            test.append(agent_actions)
             observations, rewards, terminated, truncated, info = self.single_env.step(
                 {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()}
             )
-            test1.append({agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()})
             ep_steps += 1
-        self.evaluate = True
-        print(f"Finished envisioning episode")
-        return  test, test1
+        return
 
     
     def _full_eval_episodes(self, ids, data_collector: ExperimentDataCollector):
@@ -420,7 +422,7 @@ class MultiAgentTrainerParallel:
     def _full_eval_episode(self, id, data_collector: ExperimentDataCollector):
         turning_intentions, observations, terminated, truncated, rewards, info = self._initialize_episode(id)
         ep_steps = 0
-        data_collector.start_new_scenarios([id], turning_intentions)
+        data_collector.start_new_scenarios([id], [turning_intentions])
         while (not self._is_episode_ended(observations, rewards, terminated, info) and ep_steps < 1000) or ep_steps < 1: 
             agent_actions = self._select_actions(turning_intentions, observations, terminated, truncated)
             observations, rewards, terminated, truncated, info = self.single_env.step(
@@ -452,6 +454,7 @@ class MultiAgentTrainerParallel:
                 jerk = np.linalg.norm(infos[agent_id]['env_obs'].ego_vehicle_state.linear_jerk)
                 speed = np.linalg.norm(velocity)
                 acceleration = self._get_directional_acceleration(velocity, acceleration)
+                time_separation = infos[agent_id]['time_separation']
                 
                 dt = infos[agent_id]['env_obs'].dt
                 travel_distance = infos[agent_id]['env_obs'].distance_travelled
@@ -464,8 +467,9 @@ class MultiAgentTrainerParallel:
                     jerk=jerk,
                     dt=dt,
                     travel_distance=travel_distance,
+                    time_separation=time_separation,
                     is_waiting=is_waiting,
-                    scenario_id=id
+                    scenario_id=id,
                 )
                 if infos[agent_id]['env_obs'].events.collisions:
                     data_collector.mark_agent_crashed(agent_id, id)
@@ -479,6 +483,7 @@ class MultiAgentTrainerParallel:
             jerk = np.linalg.norm(social_traffic["linear_jerk"])
             speed = np.linalg.norm(velocity)
             acceleration = self._get_directional_acceleration(velocity, acceleration)
+            time_separation = social_traffic["time_separation"]
 
             data_collector.record_agent_data(
                     social_traffic["id"],
@@ -487,8 +492,9 @@ class MultiAgentTrainerParallel:
                     jerk=jerk,
                     dt=social_traffic["dt"],
                     travel_distance=social_traffic["travel_distance"],
+                    time_separation=time_separation,
                     is_waiting=(social_traffic["speed"] < 0.1),
-                    scenario_id=id
+                    scenario_id=id,
                 )
 
     def collect_statistics(self, parallel = True):

@@ -23,7 +23,7 @@ class Reward(gym.Wrapper):
         info = self._add_social_traffic_info(info)
         return obs, info
 
-    def step(self, action, conflicts):
+    def step(self, action):
         """
         Steps through the environment.
 
@@ -35,15 +35,9 @@ class Reward(gym.Wrapper):
         """
         obs, reward, terminated, truncated, info = self.env.step(action)
         info = self._add_social_traffic_info(info)
-        info = self._add_passed_intersection_info(info)
-        wrapped_reward = self._compute_reward(obs, reward, info, conflicts)
+        wrapped_reward = self._compute_reward(obs, reward, info)
         return obs, wrapped_reward, terminated, truncated, info
     
-    def _add_passed_intersection_info(self, info: dict) -> dict:
-        for agent_name in self.agent_names:
-            if agent_name in info:
-                info[agent_name]['passed_intersection'] = self._check_if_agent_passed_intersection(agent_name, info)
-        return info
     
     def _check_if_agent_passed_intersection(self, agent_name: str, info: dict) -> bool:
         """
@@ -89,13 +83,13 @@ class Reward(gym.Wrapper):
                 self.env.env.smarts.last_dt,
             )
 
-            # Add vehicle traffic info
             info['social_traffic'].append({
                 'id': vehicle.id,
                 'speed': vehicle.speed,
                 'linear_velocity': vehicle.state.linear_velocity,
                 'linear_jerk': linear_jerk,
                 'linear_acceleration': linear_acc,
+                'position': vehicle.position,
                 'dt': self.env.env.smarts.last_dt,
                 'travel_distance': 0,  # Placeholder for missing info
             })
@@ -146,7 +140,6 @@ class Reward(gym.Wrapper):
                         other_agent != agent
                         and other_agent in info
                         and other_agent in conflicts[agent]
-                        and not info[other_agent]['passed_intersection']
                         and time_to_intersection[agent] > time_to_intersection[other_agent]
                     )
                 ]
@@ -162,7 +155,7 @@ class Reward(gym.Wrapper):
         return rewards
     
 
-    def _compute_reward(self, obs: dict, env_reward: dict, info: dict, conflicts) -> np.ndarray:
+    def _compute_reward(self, obs: dict, env_reward: dict, info: dict) -> np.ndarray:
         """
         Computes the reward for each agent.
 
@@ -176,12 +169,8 @@ class Reward(gym.Wrapper):
         num_vehs = len(obs.keys())
         reward = [0 for _ in range(num_vehs)]
         w = 0
-        reward_based_on_time_to_intersection = self._get_reward_based_on_time_to_intersection(info, conflicts)
         for i, agent_name in enumerate(self.agent_names):
             if agent_name in obs.keys():
-                
-                print(reward_based_on_time_to_intersection[agent_name])
-
                 if obs[agent_name]["events"]["not_moving"]:
                     reward[w] -= 1
                 elif obs[agent_name]["events"]["collisions"]:
