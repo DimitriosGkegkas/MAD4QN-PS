@@ -6,10 +6,10 @@ import random
 if __name__ == "__main__":
 
     algorithms = [
-        "ATL1",
-        "ATL2",
-        "FTTL1",
-        "FTTL2",
+        # "ATL1",
+        # "ATL2",
+        # "FTTL1",
+        # "FTTL2",
         "FTTLOPT",
         "Centralized",
         # "keepLane",
@@ -17,7 +17,8 @@ if __name__ == "__main__":
         #     "DuelingDDQNAgentsNoParaller",
         #     "DuelingDDQNAgentsNoRandomLR",
         # "MAD4QN-PS",
-        "DropOutLayer2",
+        # "mad4qn",
+        # "DropOutLayer2",
         "DropOutLayer2-v1",
         # "keepLane",
         #   "keepLaneSlow",
@@ -35,4 +36,41 @@ if __name__ == "__main__":
         plotter.add_algorithm(algo)
 
     # Plot average travel time comparison
+    plotter.plot_travel_speed_success()
     plotter.plot_combined_statistics()
+    plotter.plot_comfort_energy()
+
+    algorithms = [
+        # "ATL1",
+        # "ATL2",
+        # "FTTL1",
+        # "FTTL2",
+        "FTTLOPT",
+        "Centralized",
+        # "keepLane",
+        # "random",
+        #     "DuelingDDQNAgentsNoParaller",
+        #     "DuelingDDQNAgentsNoRandomLR",
+        # "MAD4QN-PS",
+        # "mad4qn",
+        # "DropOutLayer2",
+        "DropOutLayer2-v1",
+        # "keepLane",
+        #   "keepLaneSlow",
+        #   "DuelingDDQNAgents1",
+        #     "DuelingDDQNAgents-v1",
+        #     "DuelingDDQNAgentsNoRandom",
+        #     "DuelingDDQNAgentsNoParaller"
+    ]
+
+    # Initialize the plotter
+    plotter = StatisticsPlotter()
+
+    # Add algorithms (most recent data is selected by default)
+    for algo in algorithms:
+        plotter.add_algorithm(algo)
+
+    # Plot average travel time comparison
+    # plotter.plot_travel_speed_success()
+    # plotter.plot_combined_statistics()
+    plotter.plot_comfort_energy()

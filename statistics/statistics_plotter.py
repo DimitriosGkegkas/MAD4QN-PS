@@ -40,15 +40,14 @@ class StatisticsPlotter:
         """
         base_dir = "figures"
         sorted_algorithms = "_".join(sorted(algorithms))
-        folder_path = os.path.join(base_dir, sorted_algorithms)
 
         # Subfolder for the current date (DDMMYYYY format)
         current_date = datetime.now().strftime("%d%m%Y")
-        date_folder = os.path.join(folder_path, current_date)
+        date_folder = os.path.join(base_dir, current_date)
         os.makedirs(date_folder, exist_ok=True)
 
         # Save the figure
-        file_path = os.path.join(date_folder, f"{name}.png")
+        file_path = os.path.join(date_folder, f"{name}_{sorted_algorithms}.png")
         figure.savefig(file_path)
         print(f"Saved figure to {file_path}")
 
@@ -68,7 +67,7 @@ class StatisticsPlotter:
         ax.bar(x + width/2, waiting_times, width, label='Waiting Time', color='lightgreen')
         ax.set_title('Travel and Waiting Time Comparison', fontsize=22)
         ax.set_xticks(x)
-        ax.set_xticklabels(algorithms, rotation=45, fontsize=18)
+        ax.set_xticklabels(algorithms, rotation=0, fontsize=18)
         ax.set_ylabel('Time (seconds)', fontsize=18)
         ax.legend(fontsize=18)
         plt.grid(axis='y')
@@ -96,7 +95,7 @@ class StatisticsPlotter:
         ax.set_title('Success, Crash, and Incomplete Rates', fontsize=22)
         ax.set_ylabel('Percentage (%)', fontsize=18)
         ax.set_xticks(range(len(algorithms)))  # Ensure tick positions match the bars
-        ax.set_xticklabels(algorithms, rotation=45, ha='right', fontsize=18) # Rotate and align labels
+        ax.set_xticklabels(algorithms, rotation=0, ha='right', fontsize=18) # Rotate and align labels
     
     
         ax.legend(fontsize=18)
@@ -142,7 +141,7 @@ class StatisticsPlotter:
         ax.bar(x + width/2, avg_accelerations, width, label='Average Acceleration', color='coral')
         ax.set_title('Speed and Acceleration Comparison', fontsize=22)
         ax.set_xticks(x)
-        ax.set_xticklabels(algorithms, rotation=45, fontsize=18)
+        ax.set_xticklabels(algorithms, rotation=0, fontsize=18)
         ax.set_ylabel('Values', fontsize=18)
         ax.legend(fontsize=18)
         plt.grid(axis='y')
@@ -171,7 +170,7 @@ class StatisticsPlotter:
 
         fig, axs = plt.subplots(3, 2, figsize=(30, 10))
         
-        plt.subplots_adjust(hspace=1, wspace=0.3)
+        plt.subplots_adjust(hspace=0.3, wspace=0.1)
 
         # Top Left: Travel Time and Waiting Time
         x = np.arange(len(algorithms))
@@ -180,7 +179,7 @@ class StatisticsPlotter:
         axs[0, 0].bar(x + width/2, waiting_times, width, label='Average Waiting Time', color='lightgreen')
         axs[0, 0].set_title('Travel and Waiting Time', fontsize=22)
         axs[0, 0].set_xticks(x)
-        axs[0, 0].set_xticklabels(algorithms, rotation=45, fontsize=18)
+        axs[0, 0].set_xticklabels(algorithms, rotation=0, fontsize=18)
         axs[0, 0].set_ylabel('Time (seconds)', fontsize=18)
         axs[0, 0].legend(fontsize=18)
 
@@ -199,7 +198,7 @@ class StatisticsPlotter:
         axs[1, 0].set_title('Energy Consumption', fontsize=22)
         axs[1, 0].set_ylabel('Average Energy Consumption (Wh/Km)', fontsize=18)
         axs[1, 0].set_xlabel('Algorithm')
-        axs[1, 0].set_ylim(min(fuel_consumptions), max(fuel_consumptions) )
+        axs[1, 0].set_ylim(0.9*min(fuel_consumptions), 1.1*max(fuel_consumptions) )
 
         # Bottom Right: Speed and Acceleration
         # Bar for Average Speed on the left y-axis
@@ -208,7 +207,7 @@ class StatisticsPlotter:
         ax1.set_ylabel('Average Speed (m/s)', color='cornflowerblue', fontsize=18)
         ax1.tick_params(axis='y', labelcolor='cornflowerblue', labelsize=18)
         ax1.set_xticks(x)
-        ax1.set_xticklabels(algorithms, rotation=45, fontsize=18)
+        ax1.set_xticklabels(algorithms, rotation=0, fontsize=18)
         ax1.set_title('Speed and Acceleration', fontsize=22)
 
         # Create a twin y-axis for Average Acceleration
@@ -229,7 +228,7 @@ class StatisticsPlotter:
         axs[2, 1].legend(fontsize=18)
         
         for ax in axs.flat:
-            ax.tick_params(axis='x', labelsize=12, rotation=45) 
+            ax.tick_params(axis='x', labelsize=12, rotation=0) 
 
         # plt.tight_layout()
 
@@ -238,6 +237,103 @@ class StatisticsPlotter:
         self._save_figure(fig, "combined_statistics", algorithms)
         
         plt.show()
+        
+    def plot_travel_speed_success(self):
+        """
+        Plot Travel & Waiting Time, Speed & Acceleration, and Success, Crash, and Incomplete Rates
+        """
+        algorithms = list(self.results.keys())
+        plt.rcParams.update({'xtick.labelsize': 18, 'ytick.labelsize': 18})
+
+        travel_times = [self.results[algo].get("travel_time", 0) for algo in algorithms]
+        waiting_times = [self.results[algo].get("waiting_time", 0) for algo in algorithms]
+        success_rates = [self.results[algo].get("success_rate", 0) for algo in algorithms]
+        crash_rates = [self.results[algo].get("crash_rate", 0) for algo in algorithms]
+        incomplete_rates = [self.results[algo].get("incomplete_rate", 0) for algo in algorithms]
+        avg_speeds = [self.results[algo].get("speed", 0) for algo in algorithms]
+        avg_accelerations = [self.results[algo].get("acceleration", 0) for algo in algorithms]
+        
+        fig, axs = plt.subplots(3, 1, figsize=(8, 13))
+        plt.subplots_adjust(hspace=0.3, wspace=0.1)
+        x = np.arange(len(algorithms))
+        width = 0.35
+        
+        # Travel and Waiting Time
+        axs[0].bar(x - width/2, travel_times, width, label='Average Travel Time', color='skyblue')
+        axs[0].bar(x + width/2, waiting_times, width, label='Average Waiting Time', color='lightgreen')
+        axs[0].set_title('Travel and Waiting Time', fontsize=22)
+        axs[0].set_xticks(x)
+        axs[0].set_xticklabels(algorithms, rotation=0, fontsize=18)
+        axs[0].set_ylabel('Time (seconds)', fontsize=18)
+        axs[0].legend(fontsize=18)
+        axs[0].grid(True, linestyle='--', alpha=0.7)
+        
+        # Speed and Acceleration
+        ax1 = axs[1]
+        ax1.bar(x - width/2, avg_speeds, width, label='Average Speed (m/s)', color='cornflowerblue')
+        ax1.set_ylabel('Average Speed (m/s)', color='cornflowerblue', fontsize=18)
+        ax1.tick_params(axis='y', labelcolor='cornflowerblue', labelsize=18)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(algorithms, rotation=0, fontsize=18)
+        ax1.set_title('Speed and Acceleration', fontsize=22)
+        ax1.grid(True, linestyle='--', alpha=0.7)
+        
+        ax2 = ax1.twinx()
+        ax2.bar(x + width/2, avg_accelerations, width, label='Average Acceleration (m/s²)', color='coral')
+        ax2.set_ylabel('Average Acceleration (m/s²)', color='coral', fontsize=18)
+        ax2.tick_params(axis='y', labelcolor='coral', labelsize=18)
+        
+        # Success, Crash, and Incomplete Rates
+        axs[2].bar(algorithms, success_rates, label='Average Success Rate', color='lightgreen')
+        axs[2].bar(algorithms, crash_rates, bottom=success_rates, label='Average Crash Rate', color='salmon')
+        axs[2].bar(algorithms, incomplete_rates,
+                   bottom=[success_rates[i] + crash_rates[i] for i in range(len(success_rates))],
+                   label='Average Incomplete Rate', color='lightgray')
+        axs[2].set_title('Success, Crash, and Incomplete Rates', fontsize=22)
+        axs[2].set_ylabel('Average Percentage (%)', fontsize=18)
+        axs[2].set_xlabel('Algorithm', fontsize=18)
+        axs[2].legend(fontsize=18)
+        axs[2].grid(True, linestyle='--', alpha=0.7)
+
+        fig.set_size_inches(15, 15)
+        self._save_figure(fig, "travel_speed_success", algorithms)
+        plt.show()
+    
+    def plot_comfort_energy(self):
+        """
+        Plot Passenger Comfort Metrics and Energy Consumption
+        """
+        algorithms = list(self.results.keys())
+        plt.rcParams.update({'xtick.labelsize': 18, 'ytick.labelsize': 18})
+
+        fuel_consumptions = [self.results[algo].get("energy_consumption", 0) for algo in algorithms]
+        avg_absolute_jerk = [self.results[algo].get("absolute_jerk", 0) for algo in algorithms]
+        avg_absolute_acceleration = [self.results[algo].get("absolute_acceleration", 0) for algo in algorithms]
+        
+        fig, axs = plt.subplots(2, 1, figsize=(8, 15))
+        plt.subplots_adjust(hspace=0.3, wspace=0.1)
+        
+        # Energy Consumption
+        axs[0].bar(algorithms, fuel_consumptions, color='gold')
+        axs[0].set_title('Average Energy Consumption', fontsize=22)
+        axs[0].set_ylabel('kWh/Km', fontsize=18)
+        # axs[0].set_xlabel('Algorithm', fontsize=18)
+        axs[0].set_ylim(0.9*min(fuel_consumptions), 1.1*max(fuel_consumptions))
+        axs[0].grid(True, linestyle='--', alpha=0.7)
+        
+        # Passenger Comfort Analysis
+        axs[1].bar(algorithms, avg_absolute_jerk, color='purple', label='Average Absolute Jerk')
+        axs[1].bar(algorithms, avg_absolute_acceleration, color='orange', bottom=avg_absolute_jerk, label='Average Absolute Acceleration')
+        axs[1].set_xlabel('Algorithm', fontsize=18)
+        # axs[1].set_ylabel('|a| + |Jerk|', fontsize=18)
+        axs[1].set_title('Passenger Comfort Analysis: Absolute Acceleration & Jerk', fontsize=22)
+        axs[1].legend(fontsize=18)
+        axs[1].grid(True, linestyle='--', alpha=0.7)
+        
+        fig.set_size_inches(16, 10)
+        self._save_figure(fig, "comfort_energy", algorithms)
+        plt.show()
+
 
 
 

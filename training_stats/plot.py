@@ -10,7 +10,7 @@ base_dir = "training_stats"
 
 # Model names
 # models = [ "decay-preload", "decay-v1" , "decay-v2", "DuelingDDQNAgents92", "DuelingDDQNAgents-v1" ]
-models = [ "decay-preload", "decay-v1" , "test", ]
+models = [ "DropOutLayer2-v1", "DropOutLayer2" ]
 
 
 # Function to get the latest date folder
@@ -90,7 +90,6 @@ for i, model in enumerate(models):
         loss_values = [d["loss"] for d in learning_curve_data[model] if d is not None]
         epsilon = [d["epsilon"] for d in learning_curve_data[model] if d is not None]
         steps = [d["learn_step_counter"] for d in learning_curve_data[model] if d is not None]
-        print(loss_values[:3])
 
         # Plot loss and epsilon
         axes[i, 1].plot(steps, loss_values, label=f"{model} - Loss", alpha=0.6)
