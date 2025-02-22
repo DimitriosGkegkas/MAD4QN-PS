@@ -28,7 +28,7 @@ if __name__ == '__main__':
         ),
     )
     trainer.initialize_agents(
-        Tmax=0.8,
+        Tmax=0.1,
         Tmin=0.01,
         epsilon_decay_cycle_length = 1e5,
         replace=1e3,
