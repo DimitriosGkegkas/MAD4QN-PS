@@ -28,11 +28,11 @@ if __name__ == '__main__':
         ),
     )
     trainer.initialize_agents(
-        Tmax=0.8,
+        Tmax=0.1,
         Tmin=0.01,
         epsilon_decay_cycle_length = 1e5,
         replace=1e3,
         batch_size=2*256,
     )
-    trainer.preload("models/DropOutLayer2/17022025")
+    trainer.preload("models/DropOutLayer2-v1/18022025")
     trainer.train()
