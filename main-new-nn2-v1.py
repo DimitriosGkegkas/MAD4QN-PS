@@ -1,16 +1,8 @@
+import pathlib
 import argparse
+from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from smarts.core.agent_interface import AgentInterface, AgentType
 from smarts.zoo.agent_spec import AgentSpec
-from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
-
-
-class MultiAgentTrainer_v1 (MultiAgentTrainerParallel):
-    def format_action(self, action):
-        if action:
-            return (0, 0)
-        else:
-            return (15, 0)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -19,22 +11,22 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoint', action='store_true', help='Load saved models')
     args = parser.parse_args()
     args.headless = True
+
+    agent_spec = AgentSpec(
+            interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
+        )
     
+    scenarios_path_base = pathlib.Path(__file__).absolute().parent / "scenarios" / "sumo" / "traffic_lights" 
 
-    trainer = MultiAgentTrainer_v1(args, num_env=1, algorithm_identifier='DropOutLayer2-v1',evaluation_step=10, evaluation=True)
-    trainer.initialize_environment(
-        AgentSpec(
-            interface=AgentInterface.from_type(AgentType.LanerWithSpeed, max_episode_steps=None, top_down_rgb=True),
-        ),
-    )
-    trainer.initialize_agents(
-        Tmax=0.1,
-        Tmin=0.01,
-        epsilon_decay_cycle_length = 1e5,
-        replace=1e3,
-        batch_size=2*256,
-    )
-    trainer.preload("models/DropOutLayer2-v1/20022025")
-    # trainer.train()
 
-    trainer.collect_statistics(parallel=True)
+    for baseline_algo in ["Centralized"]:
+    # for baseline_algo in ["FTTL1"]:
+        scenario_subdir = scenarios_path_base / baseline_algo
+        trainer = MultiAgentTrainerParallel(args, num_env=1, agent_count=0, algorithm_identifier=baseline_algo)
+        trainer.initialize_environment(
+            agent_spec,
+            scenario_subdir=scenario_subdir,
+            parallel=False,
+        )
+        trainer.envision(34)
+        # trainer.collect_statistics(parallel=False)

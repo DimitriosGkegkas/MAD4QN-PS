@@ -1,4 +1,5 @@
 from genericpath import exists
+import re
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -80,44 +81,21 @@ for model in models:
         if os.path.exists(learning_curve_path):
             learning_curve_data[model] = np.load(learning_curve_path, allow_pickle=True)
 
-# Create subplots for each model without using constrained_layout.
-fig, axes = plt.subplots(len(models), 2, figsize=(15, 4 * len(models)))
-plt.subplots_adjust(hspace=0.4, wspace=0.3)  # Add extra space between plots
-
 for i, model in enumerate(models):
     if model in reward_data:
         rdata = [r[0] for r in reward_data[model]]
-        steps = []
+        steps=[]
         for r in reward_data[model]:
-            if len(r) > 2:
-                steps.append(r[2] / 1000)
-            else:
-                steps.append(0)
-        axes[i, 0].plot(steps, rdata, label="Reward", alpha=0.8)
-        axes[i, 0].axhline(y=150, color=crash_line_color, linestyle='--', label="Crash Reward")
-        axes[i, 0].axhline(y=300, color=success_line_color, linestyle='--', label="Success Reward")
+            time_obj = datetime.strptime(r[1], "%H:%M:%S.%f")
+            total_seconds = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
+            steps.append(total_seconds)
 
-        axes[i, 0].set_xlabel("Learning Steps (x1000)")
-        axes[i, 0].set_ylabel("Reward")
-        axes[i, 0].set_title(f"Reward Curve - {model}")
-        axes[i, 0].legend()
-        axes[i, 0].grid(True)
+        plt.plot(steps, rdata, label="Reward", alpha=0.8, )
+        plt.xlabel("Learning Steps (x1000)")
+        plt.ylabel("Reward")
+        plt.title(f"Reward Curve")
+        plt.legend()
 
-    if model in learning_curve_data:
-        loss_values = [d["loss"] for d in learning_curve_data[model] if d is not None]
-        epsilon = [d["epsilon"] for d in learning_curve_data[model] if d is not None]
-        steps = [d["learn_step_counter"] / 1000 for d in learning_curve_data[model] if d is not None]
-
-        axes[i, 1].plot(steps, loss_values, label="Loss", alpha=0.8, )
-        axes[i, 1].plot(steps, epsilon, label="Epsilon", alpha=0.8,)
-        axes[i, 1].plot(downsample_data(steps), downsample_data(loss_values),
-                        linestyle="--",)
-
-        axes[i, 1].set_xlabel("Learning Steps (x1000)")
-        axes[i, 1].set_ylabel("Loss")
-        axes[i, 1].set_title(f"Loss & Epsilon Curve - {model}")
-        axes[i, 1].legend()
-        axes[i, 1].grid(True)
 
 # Create subfolder for the current date (DDMMYYYY format)
 current_date = datetime.now().strftime("%d%m%Y")
@@ -126,5 +104,6 @@ os.makedirs(date_folder, exist_ok=True)
 
 # Save the figure
 file_path = os.path.join(date_folder, "learning_curve_training.png")
-fig.savefig(file_path)
+plt.savefig(file_path)
+# fig.savefig(file_path)
 print(f"Saved figure to {file_path}")

@@ -125,10 +125,10 @@ class ExperimentDataCollector:
         """Get all scenarios where at least one agent crashed."""
         return [scenario for scenario in self.scenarios if any(agent["state"] == "crashed" for agent in scenario.values())]
     
-    def get_energy_consumption(self):
+    def get_energy_consumption(self, scenarios):
         """Get energy consumption for all agents in the current scenario."""
         energy_consumption = []
-        for scenario in self.scenarios:
+        for scenario in scenarios:
             for agent in scenario.values():
                 energy_model = ElectricVehicleEnergyModel()
                 for v, a, dt in zip(agent["speeds"], agent["accelerations"], agent["dt"]):
@@ -146,6 +146,7 @@ class ExperimentDataCollector:
     
     def get_acceleration_time_series(self, agent_id, scenario_id):
         """Get acceleration time series for a specific agent in the current scenario."""
+        print(self.scenarios[scenario_id])
         agent = self.scenarios[scenario_id][agent_id]
         return agent["accelerations"]
     def get_speed_time_series(self, agent_id, scenario_id):
@@ -183,7 +184,7 @@ class ExperimentDataCollector:
                 if (agent["time_separation"] < 0):
                     print(index)
         
-        
+        print(len(succeeded_scenarios),total_scenarios, crashed_scenarios)
         statistics = {
             "travel_time": np.mean([
                 sum(agent["dt"])
@@ -222,10 +223,10 @@ class ExperimentDataCollector:
             ]),
             "lack_of_confidence": np.mean([
                 np.exp(-0.5*min([max(agent["time_separation"],0) for agent in scenario.values()]))
-                for scenario in succeeded_scenarios
+                for scenario in self.scenarios
                 
             ]),
-            "energy_consumption": np.mean(self.get_energy_consumption()),
+            "energy_consumption": np.mean(self.get_energy_consumption(succeeded_scenarios)),
             "success_rate": len(succeeded_scenarios) / total_scenarios * 100 if total_scenarios > 0 else 0,
             "crash_rate": len(crashed_scenarios) / total_scenarios * 100 if total_scenarios > 0 else 0,
             "incomplete_rate": (total_scenarios - len(succeeded_scenarios) - len(crashed_scenarios)) / total_scenarios * 100 if total_scenarios > 0 else 0,
