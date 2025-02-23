@@ -83,7 +83,7 @@ class DuelingDDQNAgent():
             # Convert Q-values into Mellowmax probability distribution
             q_values = advantage.detach().cpu().numpy().squeeze()  # Convert (1, num_actions) → (num_actions)
             mellow_val = self.mellowmax(q_values)
-            probabilities = np.exp(self.omega * (q_values - mellow_val))  # Soft assignment
+            probabilities = np.exp((q_values - mellow_val)/ self.T)
 
             # Normalize probabilities
             probabilities /= np.sum(probabilities)
