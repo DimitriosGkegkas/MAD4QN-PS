@@ -14,7 +14,7 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='CheckT',evaluation_step=10, evaluation=True)
+    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='CheckT',evaluation_step=10, evaluation=False)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
