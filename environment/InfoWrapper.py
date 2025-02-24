@@ -42,7 +42,7 @@ class AgentInformationHelper():
         return np.sqrt((position[0] - self.position[0]) ** 2 + (position[1] - self.position[1]) ** 2)
     
     def get_distance_to_intersection(self, position):
-        return self.get_distance_from([38.54, 39.02])
+        return self.get_distance_from([100, 100])
     
     def get_time_to_intersection(self):
         # project self.velocity into the direction of the intersection
@@ -151,6 +151,8 @@ class AgentsInformationController():
     
     def get_time_seperation(self, ego, other):
         e = 0.0001
+        if (ego.direction == None) or (other.direction == None):
+            return np.inf, np.inf
         intersection_point = self.find_intersection(ego.position, ego.direction, other.position, other.direction)
         
         if intersection_point is None:
@@ -160,7 +162,9 @@ class AgentsInformationController():
         if dOther < 0:
             dEgo = max(np.linalg.norm(np.array(intersection_point) - np.array([ego.position[0], ego.position[1]])) - 3.5,0)
             # v1 is in the conflict point other.agent_name
-            return dEgo, dEgo / (ego.velocity[0] + e)
+            if ( dEgo / (np.linalg.norm(ego.velocity)+ e) < 0):
+                print("HI")
+            return dEgo, dEgo / (np.linalg.norm(ego.velocity[0]) + e)
     
         else:
             return np.inf, np.inf
@@ -168,7 +172,7 @@ class AgentsInformationController():
         
     
     def get_confidence(self):
-        for ego in self.agent_names:
+        for ego in self.agents:
             if not self.agents[ego].passed_intersection:
                 for conflict in self.conflicts[ego]:
                     if not self.agents[conflict].passed_intersection:
@@ -204,10 +208,10 @@ class AgentsInformationController():
     
     def set_conflicts(self):
         self.conflicts = {}
-        for ego in self.agent_names:
+        for ego in self.agents:
             self.conflicts[ego] = []
-            for other_agent in self.agent_names:
-                if (other_agent != ego) and (other_agent in self.agents):
+            for other_agent in self.agents:
+                if (other_agent != ego):
                     if (has_conflict_v2v(self.agents[ego].roads, self.agents[other_agent].roads)):
                         self.conflicts[ego] = self.conflicts.get(ego, []) + [other_agent]
         return self.conflicts

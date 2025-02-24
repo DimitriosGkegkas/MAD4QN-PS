@@ -51,7 +51,6 @@ traffic = Traffic(flows=[
 ])
 
 # Generate the scenario
-
 gen_scenario(
     scenario=Scenario(
         traffic={"basic": traffic},

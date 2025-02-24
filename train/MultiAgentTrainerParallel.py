@@ -59,6 +59,8 @@ class MultiAgentTrainerParallel:
         scenarios_path = pathlib.Path(__file__).absolute().parent.parent / scenario_subdir
         self.scenarios = [str(scenario) for scenario in scenarios_path.iterdir() if not scenario.is_file()]
         self.scenarios.sort()
+        
+        
 
         if parallel:
             self.env = make_env_parallel("smarts.env:hiway-v1", agent_interfaces, self.scenarios, True, self.args.seed, num_env= self.num_env)

@@ -11,19 +11,26 @@ if __name__ == "__main__":
 
     # plotter = StatisticsPlotter("FTTL1")
     # plotter.plot_agent_motion(agent_id="car-edge-east-EW_0_10-edge-west-EW_0_60--71865--86686-0-0.0", scenario_id=0)
+    # plotter.plot_agent_motion(agent_id="car-edge-north-NS_0_10-edge-south-NS_0_60--44830-527665-2-0.0", scenario_id=0)
     
 
-    # plotter = StatisticsPlotter("Centralized")
-    # plotter.plot_agent_motion(agent_id="car-edge-east-EW_0_10-edge-west-EW_0_60--71865--86686-0-0.0", scenario_id=0)
+    plotter = StatisticsPlotter("CENTRAL")
+    plotter.plot_agent_motion(agent_id="car-edge-west-WE_0_10-edge-south-NS_0_60-668089--43872-1-0.0", scenario_id=47)
+    plotter.plot_agent_motion(agent_id="car-edge-south-SN_0_10-edge-north-SN_0_60-276150--54108-3-0.0", scenario_id=47)
+    plotter.plot_agent_motion(agent_id="car-edge-east-EW_0_10-edge-south-NS_0_60-485341--25816-0-0.0", scenario_id=47)
+    plotter.plot_agent_motion(agent_id="car-edge-north-NS_0_10-edge-west-EW_0_60-271710-101675-2-0.0", scenario_id=47)
     
     
-    plotter = StatisticsPlotter("DropOutLayer2")
-    plotter.plot_agent_motion(agent_id="Agent-0", scenario_id=0)
-    plotter.plot_agent_motion(agent_id="Agent-1", scenario_id=0)
+    # plotter = StatisticsPlotter("MAD4QN-v1")
+    # plotter.plot_agent_motion(agent_id="Agent-0", scenario_id=47)
+    # plotter.plot_agent_motion(agent_id="Agent-1", scenario_id=46)
+    # plotter.plot_agent_motion(agent_id="Agent-2", scenario_id=46)
+    # plotter.plot_agent_motion(agent_id="Agent-3", scenario_id=46)
     
-    plotter = StatisticsPlotter("keepLane")
-    plotter.plot_agent_motion(agent_id="Agent-0", scenario_id=0)
-    plotter.plot_agent_motion(agent_id="Agent-1", scenario_id=0)
+    
+    # plotter = StatisticsPlotter("keepLane")
+    # plotter.plot_agent_motion(agent_id="Agent-0", scenario_id=0)
+    # plotter.plot_agent_motion(agent_id="Agent-1", scenario_id=0)
     # plotter.plot_agent_motion(agent_id="car-edge-east-EW_0_10-edge-west-EW_0_60--71865--86686-0-0.0", scenario_id=0)
     # plotter.plot_agent_motion(agent_id="car-edge-north-NS_0_10-edge-south-NS_0_60--44830-527665-2-0.0", scenario_id=0)
     

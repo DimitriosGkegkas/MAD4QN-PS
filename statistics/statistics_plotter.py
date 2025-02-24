@@ -20,6 +20,7 @@ class StatisticsPlotter:
         if(algorithm_identifier is not None):
             self.algorithm_identifier = algorithm_identifier
             self.dataCollector = ExperimentDataCollector(algorithm_identifier)
+            self.algorithm_identifier = algorithm_identifier
             self.dataCollector.load_raw_data()
 
     def add_algorithm(self, algorithm_identifier, date=None):
@@ -365,47 +366,71 @@ class StatisticsPlotter:
         :param agent_id: Unique identifier for the agent
         :param scenario_id: Identifier for the scenario
         """
-    
-        
+        from itertools import accumulate  # make sure accumulate is imported if not already
+
+        # Retrieve data from dataCollector
+        for index,scenario in enumerate(self.dataCollector.scenarios):
+            count = 0
+            for agent in scenario:
+                if agent == "Agent-0" and scenario[agent]["type"] == "straight":
+                    count += 1
+                if agent == "Agent-1" and scenario[agent]["type"] == "right":
+                    count += 1
+                if agent == "Agent-2" and scenario[agent]["type"] == "right":
+                    count += 1
+                if agent == "Agent-3" and scenario[agent]["type"] == "left":
+                    count += 1
+            if count >= 4:
+                print(index)
         accelerations = self.dataCollector.get_acceleration_time_series(agent_id, scenario_id)
         velocities = self.dataCollector.get_speed_time_series(agent_id, scenario_id)
-        energy_consumption , total_consumption = self.dataCollector.get_energy_consumption_time_series(agent_id, scenario_id)
+        energy_consumption, total_consumption = self.dataCollector.get_energy_consumption_time_series(agent_id, scenario_id)
         dt = self.dataCollector.get_time_step(agent_id, scenario_id)
-        print(dt)
-        print(self.dataCollector.get_total_distance(agent_id, scenario_id))
-        
         time = list(accumulate(dt))
 
+        # Define font sizes
+        label_fontsize = 12
+        title_fontsize = 18
+        legend_fontsize = 18
+        tick_fontsize = 17
+        suptitle_fontsize = 16
 
-        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 12), sharex=True)
+        # Create subplots
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 7), sharex=True)
+        plt.subplots_adjust(hspace=0.4, wspace=0.1)
         
-        # add grid title the self.algorithm_identifier
-        fig.suptitle(self.algorithm_identifier)
+        # Set overall title for the figure
+        fig.suptitle(self.algorithm_identifier, fontsize=suptitle_fontsize)
         
-
         # Plot acceleration
-        axes[0].plot(time, accelerations, marker='o', linestyle='-', color='b', label="Acceleration")
-        axes[0].set_ylabel("Acceleration (m/s²)")
-        axes[0].set_title(f"Acceleration, Velocity, and Energy Consumption of Agent Over Time")
-        axes[0].legend()
+        axes[0].plot(time, accelerations, linestyle='-', color='b', label="Acceleration")
+        axes[0].set_ylabel("Acceleration (m/s²)", fontsize=label_fontsize)
+        axes[0].set_title("Acceleration, Velocity, and Energy Consumption of Agent Over Time", fontsize=title_fontsize)
+        axes[0].legend(fontsize=legend_fontsize)
         axes[0].grid(True)
+        axes[0].tick_params(axis='both', labelsize=tick_fontsize)
 
         # Plot velocity
-        axes[1].plot(time, velocities, marker='s', linestyle='-', color='r', label="Velocity")
-        axes[1].set_ylabel("Velocity (m/s)")
-        axes[1].legend()
+        axes[1].plot(time, velocities, linestyle='-', color='r', label="Velocity")
+        axes[1].set_ylabel("Velocity (m/s)", fontsize=label_fontsize)
+        axes[1].legend(fontsize=legend_fontsize)
         axes[1].grid(True)
+        axes[1].tick_params(axis='both', labelsize=tick_fontsize)
 
         # Plot energy consumption
-        axes[2].plot(time, energy_consumption, marker='d', linestyle='-', color='g', label="Energy Consumption")
-        axes[2].set_xlabel("Time Step")
-        axes[2].set_ylabel("Energy Consumption (kWh)")
-        axes[2].set_title(f"Total energy consumption: {total_consumption} kWh/km, { sum(energy_consumption)} kWh")
-        axes[2].legend()
+        axes[2].plot(time, energy_consumption, linestyle='-', color='g', label="Energy Consumption")
+        axes[2].set_xlabel("Time Step", fontsize=label_fontsize)
+        axes[2].set_ylabel("Energy Consumption (kWh)", fontsize=label_fontsize)
+        axes[2].set_title(f"Total energy consumption: {100 * total_consumption:.2f} kWh/100km, {sum(energy_consumption):.2f} Wh", fontsize=title_fontsize)
+        axes[2].legend(fontsize=legend_fontsize)
         axes[2].grid(True)
+        axes[2].tick_params(axis='both', labelsize=tick_fontsize)
         
-
+        # Save the figure using a custom saving method
+        self._save_figure(fig, "motion", agent_id + str(scenario_id) + self.dataCollector.algorithm_identifier)
+        
         plt.show()
+
         
     def process_video(self, video_path, interval=0.5, cols=5, max_frames=20):
         frames, timestamps = extract_frames(video_path, interval, max_frames)

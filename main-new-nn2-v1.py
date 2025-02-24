@@ -22,11 +22,16 @@ if __name__ == '__main__':
     for baseline_algo in ["Centralized"]:
     # for baseline_algo in ["FTTL1"]:
         scenario_subdir = scenarios_path_base / baseline_algo
-        trainer = MultiAgentTrainerParallel(args, num_env=1, agent_count=0, algorithm_identifier=baseline_algo)
+        trainer = MultiAgentTrainerParallel(args, num_env=1, agent_count=0, algorithm_identifier=baseline_algo, evaluation=True)
         trainer.initialize_environment(
             agent_spec,
             scenario_subdir=scenario_subdir,
             parallel=False,
         )
-        trainer.envision(34)
+        # trainer.envision(0)
+        
+        trainer.envision(1)
+        
+
+        
         # trainer.collect_statistics(parallel=False)

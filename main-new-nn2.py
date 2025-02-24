@@ -27,8 +27,9 @@ if __name__ == '__main__':
         replace=1e3,
         batch_size=2*256,
     )
-    trainer.preload("models1")
+    trainer.preload("models/DropOutLayer2-v1/18022025")
     # trainer.train()
     
-    trainer.collect_statistics(parallel=True)
+    # trainer.collect_statistics(parallel=True)
+    trainer.envision(1)
     

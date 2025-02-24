@@ -179,12 +179,7 @@ class ExperimentDataCollector:
         total_scenarios = len(self.scenarios)
         succeeded_scenarios = self.get_success_scenarios()
         crashed_scenarios = self.get_crashed_scenarios()
-        for index, scenario in enumerate(succeeded_scenarios):
-            for agent in scenario.values():
-                if (agent["time_separation"] < 0):
-                    print(index)
-        
-        print(len(succeeded_scenarios),total_scenarios, crashed_scenarios)
+
         statistics = {
             "travel_time": np.mean([
                 sum(agent["dt"])
