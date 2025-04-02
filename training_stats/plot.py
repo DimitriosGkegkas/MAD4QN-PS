@@ -27,7 +27,7 @@ success_line_color = "forestgreen"     # Horizontal line for success reward
 base_dir = "training_stats"
 
 # Model names
-models = [ "para1", "para9", "para27" ]
+models = [  "CheckT0", "CheckT" ]
 
 # Function to get the latest date folder
 def get_latest_folder(model_name):
@@ -86,6 +86,7 @@ plt.subplots_adjust(hspace=0.4, wspace=0.3)  # Add extra space between plots
 
 for i, model in enumerate(models):
     if model in reward_data:
+        reward_data[model] = reward_data[model][:10]
         rdata = [r[0] for r in reward_data[model]]
         steps = []
         for r in reward_data[model]:
@@ -104,6 +105,7 @@ for i, model in enumerate(models):
         axes[i, 0].grid(True)
 
     if model in learning_curve_data:
+        learning_curve_data[model] = learning_curve_data[model][:100]
         loss_values = [d["loss"] for d in learning_curve_data[model] if d is not None]
         epsilon = [d["epsilon"] for d in learning_curve_data[model] if d is not None]
         steps = [d["learn_step_counter"] / 1000 for d in learning_curve_data[model] if d is not None]
