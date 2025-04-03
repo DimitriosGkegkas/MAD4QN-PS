@@ -5,6 +5,7 @@ import gymnasium as gym
 import numpy as np
 from sympy import E
 from utils import position2road, roads2t_i, has_conflict, has_conflict_v2v
+from smarts.core.sensor import AccelerometerSensor
 
 from utils.debug import debug_save_any_img
 
@@ -161,9 +162,6 @@ class AgentsInformationController():
         
         if dOther < 0:
             dEgo = max(np.linalg.norm(np.array(intersection_point) - np.array([ego.position[0], ego.position[1]])) - 3.5,0)
-            # v1 is in the conflict point other.agent_name
-            if ( dEgo / (np.linalg.norm(ego.velocity)+ e) < 0):
-                print("HI")
             return dEgo, dEgo / (np.linalg.norm(ego.velocity[0]) + e)
     
         else:
@@ -235,13 +233,52 @@ class InfoWrapper(gym.Wrapper):
         self.env = env
         self.agents_information_controller = AgentsInformationController(self.agent_names)
     def reset(self,
-        *,
-        seed = None
+         **kwargs
     ):
-        observation, info = self.env.reset(seed=seed)
+        observation, info = self.env.reset(**kwargs)
+        info = self._add_social_traffic_info(info)
         self.agents_information_controller.reset(info)
         return observation, info
+    def _add_social_traffic_info(self, info: dict) -> dict:
+        """
+        Adds social traffic information to the info dictionary.
 
+        Args:
+            info (dict): The original info dictionary.
+
+        Returns:
+            dict: The updated info dictionary with social traffic data.
+        """
+        info['social_traffic'] = []
+        for vehicle in self.env.env.smarts.vehicle_index.vehicles:
+            # Attach accelerometer sensor if not already attached
+            if not vehicle.subscribed_to_accelerometer_sensor:
+                vehicle.attach_sensor(AccelerometerSensor(), "accelerometer_sensor")
+            
+            # Skip vehicles subscribed to RGB sensor
+            if vehicle.subscribed_to_rgb_sensor:
+                continue
+
+            # Calculate accelerations and jerks
+            linear_acc, angular_acc, linear_jerk, angular_jerk = vehicle.accelerometer_sensor(
+                vehicle.state.linear_velocity,
+                vehicle.state.angular_velocity,
+                self.env.env.smarts.last_dt,
+            )
+
+            info['social_traffic'].append({
+                'id': vehicle.id,
+                'speed': vehicle.speed,
+                'linear_velocity': vehicle.state.linear_velocity,
+                'linear_jerk': linear_jerk,
+                'linear_acceleration': linear_acc,
+                'position': vehicle.position,
+                'dt': self.env.env.smarts.last_dt,
+                'travel_distance': 0,  # Placeholder for missing info
+            })
+
+        return info
+    
     def add_time_separation(self, info):
         self.agents_information_controller.step(info)
         time_separation = self.agents_information_controller.get_min_time_separation()
@@ -257,6 +294,7 @@ class InfoWrapper(gym.Wrapper):
     
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
+        info = self._add_social_traffic_info(info)
         info = self.add_time_separation(info)
         return obs, reward, terminated, truncated, info 
     

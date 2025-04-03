@@ -23,11 +23,11 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom =
     )
     agent_names = agent_interfaces.keys()
 
+    env = InfoWrapper(env, agent_names=agent_names)
     env = Reward(env=env, agent_names=agent_names)
     env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
     env = StackFrames(env, repeat=3, agent_names=agent_names)
     env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
-    env = InfoWrapper(env, agent_names=agent_names)
 
     return env
 
@@ -48,12 +48,11 @@ def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed,
             scenarios_order = ScenarioOrder.sequential,
             sim_name=sim_name
         )
-
+        env = InfoWrapper(env, agent_names=agent_names)
         env = Reward(env=env, agent_names=agent_names)
         env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
         env = StackFrames(env, repeat=3, agent_names=agent_names)
         env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
-        env = InfoWrapper(env, agent_names=agent_names)
         return env
     
     # lambdify
