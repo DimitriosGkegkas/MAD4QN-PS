@@ -75,7 +75,7 @@ class ExperimentDataCollector:
         agent_data["accelerations"].append(acceleration)
         agent_data["jerk"].append(jerk)
         agent_data["dt"].append(dt)
-        agent_data["time_separation"] = time_separation
+        agent_data["time_separation"] = min(time_separation, agent_data["time_separation"])
 
         # Update travel and waiting times
         if is_waiting:
@@ -218,7 +218,7 @@ class ExperimentDataCollector:
             ]),
             "lack_of_confidence": np.mean([
                 np.exp(-0.5*min([max(agent["time_separation"],0) for agent in scenario.values()]))
-                for scenario in self.scenarios
+                for scenario in succeeded_scenarios
                 
             ]),
             "energy_consumption": np.mean(self.get_energy_consumption(succeeded_scenarios)),

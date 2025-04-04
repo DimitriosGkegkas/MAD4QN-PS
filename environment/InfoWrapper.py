@@ -35,21 +35,16 @@ class AgentInformationHelper():
         return self.turning_intention
     
     def check_time_separation(self, time_separation):
-        if time_separation < self.min_time_separation:
-            self.min_time_separation = time_separation
+        # if time_separation < self.min_time_separation:
+        self.min_time_separation = time_separation
         return self.min_time_separation
     
     def get_distance_from(self, position):
         return np.sqrt((position[0] - self.position[0]) ** 2 + (position[1] - self.position[1]) ** 2)
     
-    def get_distance_to_intersection(self, position):
-        return self.get_distance_from([100, 100])
-    
-    def get_time_to_intersection(self):
-        # project self.velocity into the direction of the intersection
-        # speed = self.get_direction_speed([38.54 - self.position[0], 39.02 - self.position[1]], [self.velocity[0], self.velocity[1]])
-        
-        return self.get_distance_to_intersection(self.position) / self.velocity[0]
+    def get_distance_to_intersection(self):
+        return self.get_distance_from([38.54,39.02])
+
         
     def get_direction_speed(self, vector, linear_velocity):
         vector_norm = np.linalg.norm(vector)
@@ -65,8 +60,8 @@ class AgentInformationHelper():
         self.direction = [position[0] - self.position[0], position[1] - self.position[1]]
         self.position = position
         self.velocity = linear_velocity
-        _distance_to_intersection = self.get_distance_to_intersection(self.position)
-        if (_distance_to_intersection > self.distance_to_intersection ) and _distance_to_intersection > 6:
+        _distance_to_intersection = self.get_distance_to_intersection()
+        if (_distance_to_intersection > self.distance_to_intersection ) and _distance_to_intersection > 6 and _distance_to_intersection < 50:
             self.passed_intersection = True
         self.distance_to_intersection = _distance_to_intersection
         
