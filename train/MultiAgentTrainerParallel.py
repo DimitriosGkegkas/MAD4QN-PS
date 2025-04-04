@@ -126,8 +126,8 @@ class MultiAgentTrainerParallel:
 
     def preload(self, path):
         self.load_models(path)
-        if(not self.evaluate):
-            self._set_best_score()
+        # if(not self.evaluate):
+        #     self._set_best_score()
 
     def load_models(self, path):
         for agent in self.agents.values():
