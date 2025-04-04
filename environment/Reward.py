@@ -5,8 +5,8 @@ from smarts.core.sensor import AccelerometerSensor
 la = 0.1
 lj = 0.05
 lt = 0.1
-lx = 2
-k = 2
+lx = 1
+k = 1
 class Reward(gym.Wrapper):
     def __init__(self, env: gym.Env, agent_names=None):
         """
