@@ -14,7 +14,7 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DReward3',evaluation_step=10)
+    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DReward3',evaluation_step=10, evaluation = True)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
@@ -27,9 +27,11 @@ if __name__ == '__main__':
         replace=1e3,
         batch_size=2*256,
     )
-    trainer.preload("models/DropOutLayer2-v1/18022025")
-    trainer.train() 
+    # trainer.preload("models/DropOutLayer2-v1/18022025")
+    trainer.preload("models/DReward3/04042025")
     
-    # trainer.collect_statistics(parallel=True)
-    # trainer.envision(1)
+    # trainer.train() 
+    
+    trainer.collect_statistics(parallel=True)
+    # trainer.envision(5)
     
