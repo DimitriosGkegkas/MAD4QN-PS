@@ -21,13 +21,13 @@ if __name__ == '__main__':
         ),
     )
     trainer.initialize_agents(
-        Tmax=1.,
+        Tmax=0.9,
         Tmin=0.01,
-        epsilon_decay_cycle_length = 1e5,
+        epsilon_decay_cycle_length = 1e3,
         replace=1e3,
         batch_size=2*256,
     )
-    trainer.preload("models/DropOutLayer2-v1/18022025")
+    trainer.preload("models/DReward3/03042025")
     trainer.train() 
     
     # trainer.collect_statistics(parallel=True)
