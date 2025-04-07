@@ -5,8 +5,8 @@ from smarts.core.sensor import AccelerometerSensor
 la = 0.1
 lj = 0.05
 lt = 2
-lx = 2
-k = 2
+lx = 1
+k = 1
 class Reward(gym.Wrapper):
     def __init__(self, env: gym.Env, agent_names=None):
         """
@@ -68,12 +68,13 @@ class Reward(gym.Wrapper):
                 if obs[agent_name]["events"]["not_moving"]:
                     reward[w] -= k
                 elif obs[agent_name]["events"]["collisions"]:
-                    reward[w] -= 10 * k
+                    reward[w] -= 20 * k
                 elif obs[agent_name]["events"]["reached_goal"]:
                     reward[w] += 10 * k
                 else:
                     reward[w] += lx*env_reward[agent_name]
-                    reward[w] -= la * acceleration + lj * jerk + lt * seperation
+                    # reward[w] -= la * acceleration + lj * jerk + lt * seperation
+                    reward[w] -= lt*seperation
                 w += 1
 
         return np.float64(reward)
