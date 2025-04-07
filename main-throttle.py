@@ -23,7 +23,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainer_v1(args, num_env=1, algorithm_identifier='throttle')
+    trainer = MultiAgentTrainer_v1(args, num_env=27, algorithm_identifier='throttle', evaluation_step=5)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface(
@@ -40,7 +40,3 @@ if __name__ == '__main__':
         n_actions=len(throttleLevel),
     )
     trainer.train()
-    # trainer.collect_statistics(parallel=True)
-    # trainer.envision(16)
-    # test, test = trainer._envision_episode(30)
-
