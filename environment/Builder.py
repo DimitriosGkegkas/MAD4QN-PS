@@ -26,7 +26,7 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom =
     env = InfoWrapper(env, agent_names=agent_names)
     env = Reward(env=env, agent_names=agent_names)
     env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
-    env = StackFrames(env, repeat=3, agent_names=agent_names)
+    env = StackFrames(env, repeat=4, agent_names=agent_names)
     env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
 
     return env

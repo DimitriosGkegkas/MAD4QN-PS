@@ -67,14 +67,18 @@ class Reward(gym.Wrapper):
                 
                 if obs[agent_name]["events"]["not_moving"]:
                     reward[w] -= k
-                elif obs[agent_name]["events"]["collisions"]:
+                elif obs[agent_name]["events"]["collisions"] \
+                    or obs[agent_name]["events"]["off_route"] \
+                    or obs[agent_name]["events"]["off_road"] \
+                    or obs[agent_name]["events"]["on_shoulder"] \
+                    or obs[agent_name]["events"]["wrong_way"]:
                     reward[w] -= 20 * k
                 elif obs[agent_name]["events"]["reached_goal"]:
                     reward[w] += 10 * k
                 else:
                     reward[w] += lx*env_reward[agent_name]
                     # reward[w] -= la * acceleration + lj * jerk + lt * seperation
-                    reward[w] -= lt*seperation
+                    # reward[w] -= lt*seperation
                 w += 1
 
         return np.float64(reward)

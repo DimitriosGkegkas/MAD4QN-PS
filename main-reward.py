@@ -14,24 +14,21 @@ if __name__ == '__main__':
     args.headless = True
     
 
-    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DReward3',evaluation_step=10, evaluation = True)
+    trainer = MultiAgentTrainerParallel(args, num_env=9, algorithm_identifier='DReward4',evaluation_step=10, evaluation = True)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface.from_type(AgentType.Laner, max_episode_steps=None, top_down_rgb=True),
         ),
     )
     trainer.initialize_agents(
-        Tmax=0.9,
-        Tmin=0.01,
-        epsilon_decay_cycle_length = 1e3,
-        replace=1e3,
         batch_size=2*256,
+        n_actions=21,
     )
     # trainer.preload("models/DropOutLayer2-v1/18022025")
-    trainer.preload("models/DReward3/04042025")
+    # trainer.preload("models/DReward4/06042025")
     
-    # trainer.train() 
+    trainer.train() 
     
-    trainer.collect_statistics(parallel=True)
-    # trainer.envision(5)
+    # trainer.collect_statistics(parallel=True)
+    # trainer.envision(2)
     

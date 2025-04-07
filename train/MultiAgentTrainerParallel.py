@@ -69,10 +69,9 @@ class MultiAgentTrainerParallel:
 
     def initialize_agents(
         self,
-        Tmax=1.0,
-        Tmin=0.1,
-        omega=1.0,
-        epsilon_decay_cycle_length=1000,
+        epsilon=1.0,  # Initial epsilon value for exploration
+        eps_min=0.01, 
+        eps_dec=5e-5,
         batch_size=256,
         gamma=0.99,
         lr=0.0001,
@@ -93,10 +92,9 @@ class MultiAgentTrainerParallel:
 
         input_dims = self.env.observation_space.shape
         agent_params = {
-            'Tmax': Tmax,
-            'Tmin': Tmin,
-            'omega': omega,
-            'epsilon_decay_cycle_length': epsilon_decay_cycle_length,
+            'epsilon': epsilon,
+            'eps_min': eps_min,
+            'eps_dec': eps_dec,
             'gamma': gamma,
             'lr': lr,
             'input_dims': input_dims,
@@ -158,11 +156,11 @@ class MultiAgentTrainerParallel:
 
             self._batch_store_transitions(batch_observations, batch_agent_actions, batch_agent_rewards, batch_observations_, batch_terminated, batch_truncated, batch_turning_intentions)
 
-            self._update_agents()
+            epsilon, loss = self._update_agents()
             batch_observations = batch_observations_
             self.n_steps += 1
             ep_steps += 1
-            self._log_progress(np.mean(batch_score), ep_steps)
+            self._log_progress(np.mean(batch_score), ep_steps, epsilon, loss)
         self.n_episodes += 1
         self._evaluate_if_needed()
         
@@ -269,8 +267,13 @@ class MultiAgentTrainerParallel:
 
     def _update_agents(self):
         # if self.n_steps % (self.batch_size // 2) == 0:
+        epsilons = []
+        losses = []
         for agent in self.agents.values():
-            agent.learn()
+            epsilon, loss = agent.learn()
+            epsilons.append(epsilon)
+            losses.append(loss)
+        return np.min(epsilons), np.mean(losses)
 
     def _set_best_score(self):
         self.load_scores()
@@ -305,14 +308,14 @@ class MultiAgentTrainerParallel:
             self.scores_list = []
             self.scores_per_scenario_list = []
 
-    def _log_progress(self, score, ep_steps):
+    def _log_progress(self, score, ep_steps, epsilon=None, loss=None):
         elapsed_time = datetime.now() - self.start_time
         total_seconds = int(elapsed_time.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         
         sys.stdout.write(
-            f"\r Batch Episode: {self.n_episodes} | Steps: {ep_steps} | Avg Reward: {score:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
+            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Ls.: {loss} | Epsilon.: {epsilon:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
         )
         sys.stdout.flush()
 

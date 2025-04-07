@@ -29,8 +29,9 @@ class DuelingDQNetwork(nn.Module):
         
         # Fully Connected Layers
         self.fc4 = nn.Linear(fc_input_dims, 512)
-        self.V = nn.Linear(512, 1)
-        self.A = nn.Linear(512, n_actions)
+        self.fc5 = nn.Linear(512, 128)  # New Fully Connected Layer
+        self.V = nn.Linear(128, 1)
+        self.A = nn.Linear(128, n_actions)
 
         # Optimizer & Loss Function
         self.optimizer = optim.RMSprop(self.parameters(), lr=lr)
@@ -56,6 +57,7 @@ class DuelingDQNetwork(nn.Module):
         
         flat = layer5.view(layer5.size()[0], -1)
         flat = self.dropout(F.relu(self.fc4(flat)))
+        flat = self.dropout(F.relu(self.fc5(flat)))
         
         V = self.V(flat)
         A = self.A(flat)
