@@ -55,6 +55,9 @@ class DDPGAgent():
         mu = self.actor.forward(state).to(self.actor.device)
         mu_prime = (mu + T.tensor(self.noise(), 
                                     dtype=T.float).to(self.actor.device)) if not evaluate else mu
+        
+        # clip it between -1, 1
+        mu_prime = T.clamp(mu_prime, -1, 1)
         self.actor.train()
 
         return mu_prime.cpu().detach().numpy()[0]
