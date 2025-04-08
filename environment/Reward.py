@@ -65,14 +65,14 @@ class Reward(gym.Wrapper):
                     obs[agent_name]["ego_vehicle_state"]["linear_jerk"]
                 )
                 
-                if obs[agent_name]["events"]["not_moving"]:
+                if obs[agent_name]["events"]["not_moving"] or env_reward[agent_name] < 0.01:
                     reward[w] -= k
                 elif obs[agent_name]["events"]["collisions"] \
                     or obs[agent_name]["events"]["off_route"] \
                     or obs[agent_name]["events"]["off_road"] \
                     or obs[agent_name]["events"]["on_shoulder"] \
                     or obs[agent_name]["events"]["wrong_way"]:
-                    reward[w] -= 20 * k
+                    reward[w] -= 10 * k
                 elif obs[agent_name]["events"]["reached_goal"]:
                     reward[w] += 10 * k
                 else:

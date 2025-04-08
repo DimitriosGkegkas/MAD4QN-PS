@@ -1,19 +1,69 @@
 import pathlib
 import argparse
+from re import A
 import numpy as np
 from smarts.core.agent_interface import AgentInterface, AgentType
 from smarts.core.agent import Agent
 from smarts.zoo.agent_spec import AgentSpec
 from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from smarts.core.controllers import ActionSpaceType
+import os
 
-throttleLevel = [-1.0, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0.0,
-                          0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+from ddpg.ddpg_agent import DDPGAgent
+
 
 class MultiAgentTrainer_v1 (MultiAgentTrainerParallel):
     def format_action(self, action):
-        return throttleLevel[action]
+        # print(action)
+        return action[0]
+    def initialize_agents(
+        self,
+        batch_size=256/4,
+        gamma=0.99,
+alpha=0.0001, beta=0.001, 
+         tau=0.001,
+        mem_size_factor=1.5,
+        n_actions=1,
+        base_dir='models',
+    ):
+        mem_size = 1 if self.evaluate else 1e5
+        if self.evaluate:
+            chkpt_dir = base_dir
+            assert os.path.exists(chkpt_dir), f"Checkpoint directory {chkpt_dir} does not exist"
+        else:
+            chkpt_dir = os.path.join(
+                base_dir, self.algorithm_identifier, self.timestamp
+            )
+            os.makedirs(chkpt_dir, exist_ok=True)
 
+        input_dims = self.env.observation_space.shape
+        agent_params = {
+            'alpha': alpha,
+            'beta': beta,
+            'input_dims': input_dims,   
+            'tau': tau,    
+            'n_actions': n_actions,
+            'gamma': gamma,
+            'max_size': int(mem_size * mem_size_factor),
+            'batch_size': batch_size,
+            'algo': self.algorithm_identifier,
+            'chkpt_dir': chkpt_dir,
+            'training_stats_path': self.training_stats_path,
+        }
+        self.agents = {
+            'straight': DDPGAgent(
+                **agent_params,
+                env_name=f'agent_straight'
+            ),
+            'left': DDPGAgent(
+                **agent_params,
+                env_name=f'agent_left'
+            ),
+            'right': DDPGAgent(
+                **agent_params,
+                env_name=f'agent_right'
+            )
+        }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -36,8 +86,8 @@ if __name__ == '__main__':
         )
     )
     trainer.initialize_agents(
-        eps_dec=1e-5,
         batch_size=256,
-        n_actions=len(throttleLevel),
     )
+    
     trainer.train()
+    # trainer.envision(10)

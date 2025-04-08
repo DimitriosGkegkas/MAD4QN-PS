@@ -136,6 +136,7 @@ class MultiAgentTrainerParallel:
             self._run_episode()
 
     def _run_episode(self):
+        self.evaluate = False
         batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
         ep_steps = 0
         batch_score = [0 for _ in range(len(batch_observations))]
@@ -156,11 +157,11 @@ class MultiAgentTrainerParallel:
 
             self._batch_store_transitions(batch_observations, batch_agent_actions, batch_agent_rewards, batch_observations_, batch_terminated, batch_truncated, batch_turning_intentions)
 
-            epsilon, loss = self._update_agents()
+            self._update_agents()
             batch_observations = batch_observations_
             self.n_steps += 1
             ep_steps += 1
-            self._log_progress(np.mean(batch_score), ep_steps, epsilon, loss)
+            self._log_progress(np.mean(batch_score), ep_steps)
         self.n_episodes += 1
         self._evaluate_if_needed()
         
@@ -266,14 +267,8 @@ class MultiAgentTrainerParallel:
                 self.agents[turning_intentions[agent_name]].store_transition(observations[agent_name], agent_actions[agent_name], agent_rewards[agent_name], observations_[agent_name], done=terminated[agent_name])
 
     def _update_agents(self):
-        # if self.n_steps % (self.batch_size // 2) == 0:
-        epsilons = []
-        losses = []
         for agent in self.agents.values():
-            epsilon, loss = agent.learn()
-            epsilons.append(epsilon)
-            losses.append(loss)
-        return np.min(epsilons), np.mean(losses)
+            agent.learn()
 
     def _set_best_score(self):
         self.load_scores()
@@ -308,14 +303,14 @@ class MultiAgentTrainerParallel:
             self.scores_list = []
             self.scores_per_scenario_list = []
 
-    def _log_progress(self, score, ep_steps, epsilon=None, loss=None):
+    def _log_progress(self, score, ep_steps):
         elapsed_time = datetime.now() - self.start_time
         total_seconds = int(elapsed_time.total_seconds())
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         
         sys.stdout.write(
-            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Ls.: {loss} | Epsilon.: {epsilon:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
+            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
         )
         sys.stdout.flush()
 
