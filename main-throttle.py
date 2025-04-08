@@ -36,6 +36,7 @@ if __name__ == '__main__':
         )
     )
     trainer.initialize_agents(
+        eps_dec=1e-5,
         batch_size=256,
         n_actions=len(throttleLevel),
     )
