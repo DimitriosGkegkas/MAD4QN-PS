@@ -1,18 +1,9 @@
-import pathlib
-import argparse
-from re import A
-import numpy as np
-from smarts.core.agent_interface import AgentInterface, AgentType
-from smarts.core.agent import Agent
-from smarts.zoo.agent_spec import AgentSpec
-from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
-from smarts.core.controllers import ActionSpaceType
-import os
 
+import os
+from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from ddpg.ddpg_agent import DDPGAgent
 
-
-class MultiAgentTrainer_v1 (MultiAgentTrainerParallel):
+class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
     def format_action(self, action):
         # print(action)
         return action[0]
@@ -64,30 +55,3 @@ alpha=0.0001, beta=0.001,
                 env_name=f'agent_right'
             )
         }
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument('--load_checkpoint', action='store_true', help='Load saved models')
-    args = parser.parse_args()
-    args.headless = False
-    
-
-    trainer = MultiAgentTrainer_v1(args, num_env=27, algorithm_identifier='throttle', evaluation_step=10)
-    trainer.initialize_environment(
-        AgentSpec(
-            interface=AgentInterface(
-                waypoint_paths=True,
-                action=ActionSpaceType.RawThrottle,
-                max_episode_steps=None, 
-                top_down_rgb=True
-            )
-
-        )
-    )
-    trainer.initialize_agents(
-        batch_size=256,
-    )
-    
-    trainer.train()
-    # trainer.envision(10)
