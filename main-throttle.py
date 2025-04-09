@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainerThrottle(args, num_env=9, algorithm_identifier='throttle', evaluation_step=10, agent_count = 4)
+    trainer = MultiAgentTrainerThrottle(args, num_env=3, algorithm_identifier='maneuver', evaluation_step=10, agent_count = 1)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface(
@@ -26,8 +26,9 @@ if __name__ == '__main__':
             ),
 
         )
+        , scenario_subdir="scenarios/sumo/maneuver"
     )
     trainer.initialize_agents(
-        batch_size=256,
+        batch_size=64,
     )  
     trainer.train()
