@@ -73,7 +73,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainer_v1(args, num_env=27, algorithm_identifier='throttle', evaluation_step=10)
+    trainer = MultiAgentTrainer_v1(args, num_env=1, algorithm_identifier='throttle1', evaluation_step=20)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface(

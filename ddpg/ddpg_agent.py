@@ -32,18 +32,18 @@ class DDPGAgent():
 
         self.actor = ActorNetwork(alpha, input_dims, fc1_dims, fc2_dims,
                                   chkpt_dir=chkpt_dir,
-                                n_actions=n_actions, name='actor', device=self.device)
+                                n_actions=n_actions, name=self.env_name+'_'+self.algo+'_eval', device=self.device)
         self.critic = CriticNetwork(beta, input_dims, fc1_dims, fc2_dims,
                                 chkpt_dir=chkpt_dir,
-                                n_actions=n_actions, name='critic', device=self.device)
+                                n_actions=n_actions, name=self.env_name+'_'+self.algo+'_eval', device=self.device)
 
         self.target_actor = ActorNetwork(alpha, input_dims, fc1_dims, fc2_dims,
                                          chkpt_dir=chkpt_dir,
-                                n_actions=n_actions, name='target_actor', device=self.device)
+                                n_actions=n_actions, name=self.env_name+'_'+self.algo+'_target', device=self.device)
 
         self.target_critic = CriticNetwork(beta, input_dims, fc1_dims, fc2_dims,
                                            chkpt_dir=chkpt_dir,
-                                n_actions=n_actions, name='target_critic', device=self.device)
+                                n_actions=n_actions, name=self.env_name+'_'+self.algo+'_target', device=self.device)
         self.learn_step_counter = 0
         self.learning_curve = []
         
@@ -71,11 +71,11 @@ class DDPGAgent():
         self.critic.save_checkpoint()
         self.target_critic.save_checkpoint()
 
-    def load_models(self):
-        self.actor.load_checkpoint()
-        self.target_actor.load_checkpoint()
-        self.critic.load_checkpoint()
-        self.target_critic.load_checkpoint()
+    def load_models(self, path = None):
+        self.actor.load_checkpoint(path)
+        self.target_actor.load_checkpoint(path)
+        self.critic.load_checkpoint(path)
+        self.target_critic.load_checkpoint(path)
 
     def learn(self):
         if self.memory.mem_cntr < self.batch_size:

@@ -13,9 +13,9 @@ class CriticNetwork(nn.Module):
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.name = name
+        self.name = name + '_critic'
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_ddpg')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, self.name)
         # Convolutional Layers
         self.conv1 = nn.Conv2d(input_dims[0], 32, 8, stride=1)
         self.conv2 = nn.Conv2d(32, 64, 4, stride=1)
@@ -89,18 +89,66 @@ class CriticNetwork(nn.Module):
 
         return state_action_value
 
+
     def save_checkpoint(self):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+        checkpoint = {
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+        }
+        T.save(checkpoint, self.checkpoint_file)
 
-    def load_checkpoint(self):
+    def search_for_load_file(self, path):
+        """
+        Searches for the best matching checkpoint file in the given directory.
+        
+        :param path: The directory where checkpoint files are stored.
+        :return: The path to the best matching checkpoint file, or None if not found.
+        """
+        if not os.path.exists(path):
+            print(f"Path '{path}' does not exist.")
+            return None
+
+        # Split self.name based on '_'
+        name_parts = self.name.split('_')
+
+        if len(name_parts) < 4:
+            print("Error: The model name should have at least 4 parts separated by '_'.")
+            return None
+
+        # Extract first two and last two words
+        first_two = '_'.join(name_parts[:2])
+        last_two = '_'.join(name_parts[-2:])
+
+        best_match = None
+
+        # Search for matching files
+        for file in os.listdir(path):
+            if first_two in file and last_two in file:
+                best_match = os.path.join(path, file)
+                break  # If a match is found, return immediately
+
+        return best_match
+
+        
+    def load_checkpoint(self, path=None):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file))
+        if path is None:
+            checkpoint = T.load(self.checkpoint_file, map_location=self.device)
+        else:
+            checkpoint_file = self.search_for_load_file(path)
+            if checkpoint_file:
+                print(self.name, checkpoint_file)
+                checkpoint = T.load(checkpoint_file, map_location=self.device)
+            else:
+                raise ValueError("Checkpoint file not found.")
+        if ('model_state_dict' in checkpoint) and ('optimizer_state_dict' in checkpoint):
+            self.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        else: 
+            self.load_state_dict(checkpoint)
+        self.to(self.device)
 
-    def save_best(self):
-        print('... saving best checkpoint ...')
-        checkpoint_file = os.path.join(self.checkpoint_dir, self.name+'_best')
-        T.save(self.state_dict(), checkpoint_file)
     def calculate_conv_output_dims(self, input_dims):
         
         state = T.zeros(1, *input_dims)
@@ -119,9 +167,9 @@ class ActorNetwork(nn.Module):
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
-        self.name = name
+        self.name = name + '_actor'
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_ddpg')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, self.name)
         
         
         # Convolutional Layers
@@ -198,13 +246,59 @@ class ActorNetwork(nn.Module):
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+        checkpoint = {
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+        }
+        T.save(checkpoint, self.checkpoint_file)
 
-    def load_checkpoint(self):
+    def search_for_load_file(self, path):
+        """
+        Searches for the best matching checkpoint file in the given directory.
+        
+        :param path: The directory where checkpoint files are stored.
+        :return: The path to the best matching checkpoint file, or None if not found.
+        """
+        if not os.path.exists(path):
+            print(f"Path '{path}' does not exist.")
+            return None
+
+        # Split self.name based on '_'
+        name_parts = self.name.split('_')
+
+        if len(name_parts) < 4:
+            print("Error: The model name should have at least 4 parts separated by '_'.")
+            return None
+
+        # Extract first two and last two words
+        first_two = '_'.join(name_parts[:2])
+        last_two = '_'.join(name_parts[-2:])
+
+        best_match = None
+
+        # Search for matching files
+        for file in os.listdir(path):
+            if first_two in file and last_two in file:
+                best_match = os.path.join(path, file)
+                break  # If a match is found, return immediately
+
+        return best_match
+
+        
+    def load_checkpoint(self, path=None):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file))
-
-    def save_best(self):
-        print('... saving best checkpoint ...')
-        checkpoint_file = os.path.join(self.checkpoint_dir, self.name+'_best')
-        T.save(self.state_dict(), checkpoint_file)
+        if path is None:
+            checkpoint = T.load(self.checkpoint_file, map_location=self.device)
+        else:
+            checkpoint_file = self.search_for_load_file(path)
+            if checkpoint_file:
+                print(self.name, checkpoint_file)
+                checkpoint = T.load(checkpoint_file, map_location=self.device)
+            else:
+                raise ValueError("Checkpoint file not found.")
+        if ('model_state_dict' in checkpoint) and ('optimizer_state_dict' in checkpoint):
+            self.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        else:
+            self.load_state_dict(checkpoint)
+        self.to(self.device)
