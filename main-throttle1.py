@@ -88,9 +88,6 @@ if __name__ == '__main__':
     trainer.initialize_agents(
         batch_size=256,
     )
-    trainer.preload(
-        "./models/throttle/09042025"
-    )
     
     trainer.train()
     # trainer.envision(10)
