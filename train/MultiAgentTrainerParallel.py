@@ -136,7 +136,7 @@ class MultiAgentTrainerParallel:
 
     def _run_episode(self):
         self.evaluate = False
-        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
+        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode([0, 1, 2])
         ep_steps = 0
         batch_score = [0 for _ in range(len(batch_observations))]
         while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000:
