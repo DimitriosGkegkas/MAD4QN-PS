@@ -1,12 +1,16 @@
 
+from math import tanh
 import os
 from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from ddpg.ddpg_agent import DDPGAgent
+import torch as T
 
 class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
     def format_action(self, action):
         # print(action)
-        return action[0]
+        if (action[0] > 10):
+            print("Action is greater than 10 "  + str(action[0]))
+        return tanh(action[0])
     def initialize_agents(
         self,
         batch_size=256/4,

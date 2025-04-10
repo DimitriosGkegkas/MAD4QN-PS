@@ -59,6 +59,7 @@ class MultiAgentTrainerParallel:
         scenarios_path = pathlib.Path(__file__).absolute().parent.parent / scenario_subdir
         self.scenarios = [str(scenario) for scenario in scenarios_path.iterdir() if not scenario.is_file()]
         self.scenarios.sort()
+        self.scenarios = self.scenarios[:self.num_env]
         
         
 

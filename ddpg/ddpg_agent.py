@@ -6,6 +6,7 @@ from ddpg.networks import ActorNetwork, CriticNetwork
 from ddpg.noise import OUActionNoise
 from ddpg.buffer import ReplayBuffer
 from  GPUtil import getAvailable
+import torch.nn as nn
 
 class DDPGAgent():
     def __init__(self, alpha, beta, input_dims, tau, n_actions, gamma=0.99,
@@ -25,7 +26,7 @@ class DDPGAgent():
         else:
             self.device = T.device('cpu')  # Default to CPU if no GPUs are available
 
-
+        self.loss = nn.MSELoss()
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
 
         self.noise = OUActionNoise(mu=np.zeros(n_actions))
@@ -53,11 +54,10 @@ class DDPGAgent():
         self.actor.eval()
         state = T.tensor(np.array([observation]), dtype=T.float).to(self.actor.device)
         mu = self.actor.forward(state).to(self.actor.device)
+        
         mu_prime = (mu + T.tensor(self.noise(), 
                                     dtype=T.float).to(self.actor.device)) if not evaluate else mu
         
-        # clip it between -1, 1
-        mu_prime = T.clamp(mu_prime, -1, 1)
         self.actor.train()
 
         return mu_prime.cpu().detach().numpy()[0]
@@ -90,6 +90,7 @@ class DDPGAgent():
         rewards = T.tensor(rewards, dtype=T.float).to(self.actor.device)
         done = T.tensor(done).to(self.actor.device)
 
+        tmp = self.actor.forward(states_)
         target_actions = self.target_actor.forward(states_)
         critic_value_ = self.target_critic.forward(states_, target_actions)
         critic_value = self.critic.forward(states, actions)
@@ -101,14 +102,29 @@ class DDPGAgent():
         target = target.view(self.batch_size, 1)
 
         self.critic.optimizer.zero_grad()
-        critic_loss = F.mse_loss(target, critic_value)
+        # critic_loss = F.mse_loss(target, critic_value)
+        critic_loss = self.loss(target, critic_value)
         critic_loss.backward()
         self.critic.optimizer.step()
 
         self.actor.optimizer.zero_grad()
-        actor_loss = -self.critic.forward(states, self.actor.forward(states))
-        actor_loss = T.mean(actor_loss)
+        # Forward through actor and critic
+        actions_pred = self.actor(states)
+        q_values = self.critic(states, actions_pred)
+        actor_loss = -q_values.mean()
+
         actor_loss.backward()
+        # After actor_loss.backward()
+        for name, param in self.actor.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: grad mean = {param.grad.mean().item():.6f}")
+            else:
+                print(f"{name}: NO GRAD")
+        for name, param in self.critic.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: c grad mean = {param.grad.mean().item():.6f}")
+            else:
+                print(f"{name}:  c NO GRAD")
         self.actor.optimizer.step()
 
         self.update_network_parameters()
