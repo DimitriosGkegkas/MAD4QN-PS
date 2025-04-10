@@ -61,7 +61,6 @@ class MultiAgentTrainerParallel:
         self.scenarios.sort()
         
         
-
         if parallel:
             self.env = make_env_parallel("smarts.env:hiway-v1", agent_interfaces, self.scenarios, True, self.args.seed, num_env= self.num_env)
         
@@ -163,7 +162,8 @@ class MultiAgentTrainerParallel:
             ep_steps += 1
             self._log_progress(np.mean(batch_score), ep_steps)
         self.n_episodes += 1
-        self._evaluate_if_needed()
+        # self._evaluate_if_needed()
+        self._evaluate_if_needed_score(np.mean(batch_score))
         
     def _get_turning_intention(self, infos):
         turning_intentions = {}
@@ -278,7 +278,14 @@ class MultiAgentTrainerParallel:
         self.scores_per_scenario_list.append(scores_per_scenario)
         self.best_score = scores
         self.save_scores()
-
+        
+    def _evaluate_if_needed_score(self, scores):
+        # if self.n_episodes % self.evaluation_step == 0:
+        if scores > self.best_score:
+            for agent in self.agents.values():
+                agent.save_models()
+            self.best_score = scores
+            
     def _evaluate_if_needed(self):
         if self.n_episodes % self.evaluation_step == 0:
             scores, scores_per_scenario = self.eval()

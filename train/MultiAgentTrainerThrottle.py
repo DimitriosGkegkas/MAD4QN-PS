@@ -1,5 +1,6 @@
 
 import os
+from sac.sac import SAC
 from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
 from ddpg.ddpg_agent import DDPGAgent
 
@@ -11,7 +12,7 @@ class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
         self,
         batch_size=256/4,
         gamma=0.99,
-alpha=0.0001, beta=0.001, 
+        lr=0.0001,
          tau=0.001,
         mem_size_factor=1.5,
         n_actions=1,
@@ -29,8 +30,7 @@ alpha=0.0001, beta=0.001,
 
         input_dims = self.env.observation_space.shape
         agent_params = {
-            'alpha': alpha,
-            'beta': beta,
+            'lr': lr,
             'input_dims': input_dims,   
             'tau': tau,    
             'n_actions': n_actions,
@@ -42,15 +42,15 @@ alpha=0.0001, beta=0.001,
             'training_stats_path': self.training_stats_path,
         }
         self.agents = {
-            'straight': DDPGAgent(
+            'straight': SAC(
                 **agent_params,
                 env_name=f'agent_straight'
             ),
-            'left': DDPGAgent(
+            'left': SAC(
                 **agent_params,
                 env_name=f'agent_left'
             ),
-            'right': DDPGAgent(
+            'right': SAC(
                 **agent_params,
                 env_name=f'agent_right'
             )
