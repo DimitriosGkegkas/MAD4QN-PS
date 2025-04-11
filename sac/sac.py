@@ -140,12 +140,16 @@ class SAC(object):
         path = os.path.join(path, self.env_name)
         print('Loading models from {}'.format(path))
         if path is not None:
-            checkpoint = torch.load(path)
+            checkpoint = torch.load(path, map_location=self.device)
             self.policy.load_state_dict(checkpoint['policy_state_dict'])
             self.critic.load_state_dict(checkpoint['critic_state_dict'])
             self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
             self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
             self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
+            self.policy.to(self.device)
+            self.critic.to(self.device)
+            self.critic_target.to(self.device)
+        
 
             if evaluate:
                 self.policy.eval()

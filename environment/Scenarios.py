@@ -131,7 +131,6 @@ class Scenarios(gym.Wrapper):
             self.evaluation_scenario = -1
         else:
             scenario = np.random.choice(list(self._scenarios_iterator), p=self.scenarios_probs)
-        print(scenario.controller_parameters_filepath.split("/")[8])
         return self.env.reset(seed = seed, options={"scenario": scenario})
 
        

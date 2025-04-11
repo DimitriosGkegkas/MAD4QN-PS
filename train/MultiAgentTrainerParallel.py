@@ -121,14 +121,14 @@ class MultiAgentTrainerParallel:
         }
 
 
-    def preload(self, path):
-        self.load_models(path)
+    def preload(self, path, evaluate = False):
+        self.load_models(path, evaluate)
         # if(not self.evaluate):
         #     self._set_best_score()
 
-    def load_models(self, path):
+    def load_models(self, path, evaluate = False):
         for agent in self.agents.values():
-            agent.load_models(path)
+            agent.load_models(path, evaluate)
 
     def train(self):
         while self.n_steps < self.total_steps:
@@ -136,7 +136,7 @@ class MultiAgentTrainerParallel:
 
     def _run_episode(self):
         self.evaluate = False
-        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode([0, 1, 2])
+        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
         ep_steps = 0
         batch_score = [0 for _ in range(len(batch_observations))]
         while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000:
@@ -162,8 +162,8 @@ class MultiAgentTrainerParallel:
             ep_steps += 1
             self._log_progress(np.mean(batch_score), ep_steps)
         self.n_episodes += 1
-        # self._evaluate_if_needed()
-        self._evaluate_if_needed_score(np.mean(batch_score))
+        self._evaluate_if_needed()
+        # self._evaluate_if_needed_score(np.mean(batch_score))
         
     def _get_turning_intention(self, infos):
         turning_intentions = {}
