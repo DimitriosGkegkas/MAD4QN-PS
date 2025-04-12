@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainerThrottle(args, num_env=9, algorithm_identifier='throttle', evaluation_step=10, agent_count = 4)
+    trainer = MultiAgentTrainerThrottle(args, num_env=1, algorithm_identifier='throttle', evaluation_step=20, agent_count = 4)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface(
@@ -28,9 +28,9 @@ if __name__ == '__main__':
         )
     )
     trainer.initialize_agents(
-        batch_size=64,
+        batch_size=254,
     )  
-    trainer.preload("models/maneu")
+    trainer.preload("models/throttle/11042025")
     trainer.train()
     # trainer.envision(0)
     
