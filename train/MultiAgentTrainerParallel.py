@@ -207,7 +207,7 @@ class MultiAgentTrainerParallel:
 
     def _is_episode_ended(self, observations, rewards, terminated, info):
         return  (
-                    # -10 in rewards or # someone crashed
+                    -10 in rewards or # someone crashed
                     len(observations) == 0 
                     # or all(reward == -1 for reward in rewards) They have to learn not to stop
                     or ("__all__" in terminated and terminated["__all__"])
