@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args.headless = False
     
 
-    trainer = MultiAgentTrainerThrottle(args, num_env=27, algorithm_identifier='throttle', evaluation_step=10, agent_count = 4)
+    trainer = MultiAgentTrainerThrottle(args, num_env=27, algorithm_identifier='throttle-para', evaluation_step=10, agent_count = 4)
     trainer.initialize_environment(
         AgentSpec(
             interface=AgentInterface(
