@@ -123,8 +123,6 @@ class MultiAgentTrainerParallel:
 
     def preload(self, path, evaluate = False):
         self.load_models(path, evaluate)
-        # if(not self.evaluate):
-        #     self._set_best_score()
 
     def load_models(self, path, evaluate = False):
         for agent in self.agents.values():
@@ -133,37 +131,60 @@ class MultiAgentTrainerParallel:
     def train(self):
         while self.n_steps < self.total_steps:
             self._run_episode()
+            
+            
+    def step(self, batch_agent_actions):
+        """
+        Takes a step in the environment with the given batch of agent actions.
+
+        Args:
+            batch_agent_actions (list): A list of dictionaries containing agent actions.
+
+        Returns:
+            tuple: A tuple containing observations, rewards, terminated flags, truncated flags, and info.
+        """
+        observations, rewards, terminated, truncated, infos = self.env.step(
+            [
+                {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()}
+                for agent_actions in batch_agent_actions
+            ]
+        )
+        return observations, rewards, terminated, truncated, infos
 
     def _run_episode(self):
         self.evaluate = False
         batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
         ep_steps = 0
-        batch_score = [0 for _ in range(len(batch_observations))]
         while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000:
-            batch_agent_actions = self._batch_select_actions(batch_turning_intentions, batch_observations, batch_terminated, batch_truncated)
-            batch_observations_, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.env.step(
-                [ 
-                   {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()} for agent_actions in batch_agent_actions
-                ]
+            
+            batch_agent_actions = self._batch_select_actions(
+                batch_turning_intentions, 
+                batch_observations, 
+                batch_terminated, 
+                batch_truncated
+                )
+            
+            batch_observations_, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.step(
+                batch_agent_actions
             )
-            batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
-            batch_agent_rewards = []
-            for observations_, rewards in zip(batch_observations_, batch_rewards):
-                filtered_agents = [agent_name for agent_name in self.agent_names if agent_name in observations_]
-                agent_rewards = {agent_name: rewards[idx] for idx, agent_name in enumerate(filtered_agents)}
-                batch_agent_rewards.append(agent_rewards)
-
-
-            self._batch_store_transitions(batch_observations, batch_agent_actions, batch_agent_rewards, batch_observations_, batch_terminated, batch_truncated, batch_turning_intentions)
-
+            
+            self._batch_store_transitions(
+                batch_observations, 
+                batch_agent_actions, 
+                batch_rewards, 
+                batch_observations_, 
+                batch_terminated, 
+                batch_truncated, 
+                batch_turning_intentions
+                )
             self._update_agents()
             batch_observations = batch_observations_
             self.n_steps += 1
             ep_steps += 1
-            self._log_progress(np.mean(batch_score), ep_steps)
+            
+        self._log_progress(0, ep_steps)
         self.n_episodes += 1
         self._evaluate_if_needed()
-        # self._evaluate_if_needed_score(np.mean(batch_score))
         
     def _get_turning_intention(self, infos):
         turning_intentions = {}
@@ -187,7 +208,7 @@ class MultiAgentTrainerParallel:
         observations, infos = self.single_env.reset()
         turning_intentions = self._get_turning_intention(infos)
         terminated, truncated = {agent_id: False for agent_id in self.agent_names}, {agent_id: False for agent_id in self.agent_names}
-        rewards = [0 for _ in range(len(self.agent_names))]
+        rewards = {agent_id: 0 for agent_id in self.agent_names}
         return turning_intentions, observations, terminated, truncated, rewards, infos
 
     def _batch_initialize_episode(self, ids = None):
@@ -198,7 +219,7 @@ class MultiAgentTrainerParallel:
         terminated, truncated = {agent_id: False for agent_id in self.agent_names}, {agent_id: False for agent_id in self.agent_names}
         terminated["__all__"] = False
         truncated["__all__"] = False
-        rewards = [0 for _ in range(len(self.agent_names))]
+        rewards = {agent_id: 0 for agent_id in self.agent_names}
         batch_terminated = [terminated for _ in range(len(batch_observations))]
         batch_truncated = [truncated for _ in range(len(batch_observations))]
         batch_rewards = [rewards for _ in range(len(batch_observations))]
@@ -207,12 +228,10 @@ class MultiAgentTrainerParallel:
 
     def _is_episode_ended(self, observations, rewards, terminated, info):
         return  (
-                    -10 in rewards or # someone crashed
+                    -10 in rewards.values() or
                     len(observations) == 0 
                     # or all(reward == -1 for reward in rewards) They have to learn not to stop
                     or ("__all__" in terminated and terminated["__all__"])
-                    # or ep_steps > 1000
-                    
                 ) \
                 and (not info["social_traffic"])
 
@@ -226,16 +245,6 @@ class MultiAgentTrainerParallel:
             self._is_episode_ended(observations, rewards, terminated, info) \
                 for observations, rewards, terminated, info \
                     in zip(batch_observations, batch_rewards, batch_terminated, batch_infos)])
-    
-    def test(self, batch_observations, batch_rewards, batch_terminated, batch_infos, ep_steps):
-        """
-            Returns true if all the observations foreach batch are empty or the ep_steps is greater than 1000
-            also if the rewards are -1 for all the agents for all the scenarios
-        """
-        return  [
-            self._is_episode_ended(observations, rewards, terminated, info) \
-                for observations, rewards, terminated, info \
-                    in zip(batch_observations, batch_rewards, batch_terminated, batch_infos)]
     
     def act(self, obs, turning_intention):
         return self.agents[turning_intention].choose_action(obs, self.evaluate)
@@ -264,7 +273,13 @@ class MultiAgentTrainerParallel:
     def _store_transitions(self, observations, agent_actions, agent_rewards, observations_, terminated, truncated, turning_intentions):
         for idx, agent_name in enumerate(self.agent_names):
             if agent_name in observations and agent_name in observations_:
-                self.agents[turning_intentions[agent_name]].store_transition(observations[agent_name], agent_actions[agent_name], agent_rewards[agent_name], observations_[agent_name], done=(terminated[agent_name] or agent_rewards[agent_name]== -10 or agent_rewards[agent_name]== 10))
+                self.agents[turning_intentions[agent_name]].store_transition(
+                    observations[agent_name], 
+                    agent_actions[agent_name], 
+                    agent_rewards[agent_name], 
+                    observations_[agent_name], 
+                    done=(terminated[agent_name] or truncated[agent_name])
+                    )
 
     def _update_agents(self):
         for agent in self.agents.values():
@@ -278,13 +293,6 @@ class MultiAgentTrainerParallel:
         self.scores_per_scenario_list.append(scores_per_scenario)
         self.best_score = scores
         self.save_scores()
-        
-    def _evaluate_if_needed_score(self, scores):
-        # if self.n_episodes % self.evaluation_step == 0:
-        if scores > self.best_score:
-            for agent in self.agents.values():
-                agent.save_models()
-            self.best_score = scores
             
     def _evaluate_if_needed(self):
         if self.n_episodes % self.evaluation_step == 0:
@@ -310,41 +318,6 @@ class MultiAgentTrainerParallel:
             self.scores_list = []
             self.scores_per_scenario_list = []
 
-    def _log_progress(self, score, ep_steps):
-        elapsed_time = datetime.now() - self.start_time
-        total_seconds = int(elapsed_time.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        
-        sys.stdout.write(
-            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
-        )
-        sys.stdout.flush()
-
-    def _log_percentage(self, percentage):
-        """
-            percentage: float
-
-        """
-        dotes_to_display = int(percentage * 20) * "-" + int((1 - percentage) * 20) * "_"
-        sys.stdout.write(
-            f"\r [{dotes_to_display}] {percentage * 100:.2f}%"
-        )
-        sys.stdout.flush()
-    
-    def slice_list(self, lst, n):
-        """
-        Yields slices of the list, each containing up to n elements.
-
-        Args:
-            lst (list): The list to be sliced.
-            n (int): The size of each chunk.
-
-        Yields:
-            list: A slice of the list with up to n elements.
-        """
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
 
     def eval(self):
         print("\n----------------------------------------------------------------------------")
@@ -524,3 +497,39 @@ class MultiAgentTrainerParallel:
         print(f'Finished evaluation')
         self.evaluate = False
         return
+    
+    def _log_progress(self, score, ep_steps):
+        elapsed_time = datetime.now() - self.start_time
+        total_seconds = int(elapsed_time.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        sys.stdout.write(
+            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
+        )
+        sys.stdout.flush()
+
+    def _log_percentage(self, percentage):
+        """
+            percentage: float
+
+        """
+        dotes_to_display = int(percentage * 20) * "-" + int((1 - percentage) * 20) * "_"
+        sys.stdout.write(
+            f"\r [{dotes_to_display}] {percentage * 100:.2f}%"
+        )
+        sys.stdout.flush()
+    
+    def slice_list(self, lst, n):
+        """
+        Yields slices of the list, each containing up to n elements.
+
+        Args:
+            lst (list): The list to be sliced.
+            n (int): The size of each chunk.
+
+        Yields:
+            list: A slice of the list with up to n elements.
+        """
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]

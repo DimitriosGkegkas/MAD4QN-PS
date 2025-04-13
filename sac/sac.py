@@ -65,7 +65,9 @@ class SAC(object):
         if evaluate is False:
             action, _, _ = self.policy.sample(state)
         else:
+            self.policy.eval()
             _, _, action = self.policy.sample(state)
+            self.policy.train()
         return action.detach().cpu().numpy()[0]
 
     def learn(self):

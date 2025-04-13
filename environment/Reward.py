@@ -1,3 +1,4 @@
+import re
 import gymnasium as gym
 import numpy as np
 from smarts.core.sensor import AccelerometerSensor
@@ -51,9 +52,7 @@ class Reward(gym.Wrapper):
         Returns:
             np.ndarray: The computed rewards for all agents.
         """
-        num_vehs = len(obs.keys())
-        reward = [0 for _ in range(num_vehs)]
-        w = 0
+        reward = {}
         for i, agent_name in enumerate(self.agent_names):
             if agent_name in obs.keys():
                 timeSeperation = info[agent_name]["time_separation"] if "time_separation" in info[agent_name] else np.inf
@@ -64,21 +63,19 @@ class Reward(gym.Wrapper):
                 jerk = np.linalg.norm(
                     obs[agent_name]["ego_vehicle_state"]["linear_jerk"]
                 )
-                
+                reward[agent_name] = 0
                 if obs[agent_name]["events"]["not_moving"] or env_reward[agent_name] < 0.01:
-                    reward[w] -= k
+                    reward[agent_name] -= k
                 elif obs[agent_name]["events"]["collisions"] \
                     or obs[agent_name]["events"]["off_route"] \
                     or obs[agent_name]["events"]["off_road"] \
-                    or obs[agent_name]["events"]["on_shoulder"] \
                     or obs[agent_name]["events"]["wrong_way"]:
-                    reward[w] -= 10 * k
+                    reward[agent_name] -= 10 * k
                 elif obs[agent_name]["events"]["reached_goal"]:
-                    reward[w] += 10 * k
+                    reward[agent_name] += 10 * k
                 else:
-                    reward[w] += lx*env_reward[agent_name]
+                    reward[agent_name] += lx*env_reward[agent_name]
                     # reward[w] -= la * acceleration + lj * jerk + lt * seperation
                     # reward[w] -= lt*seperation
-                w += 1
 
-        return np.float64(reward)
+        return reward
