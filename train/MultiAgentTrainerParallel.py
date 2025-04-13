@@ -351,7 +351,7 @@ class MultiAgentTrainerParallel:
                 ]
             )
             
-            batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
             ep_steps += 1
         return batch_score
     def envision(self, id):
@@ -393,7 +393,7 @@ class MultiAgentTrainerParallel:
                 ]
             )
             self._extract_scenario_data_batch(ids, batch_observations, batch_infos, data_collector)
-            batch_score = [sum(rewards) + score for rewards, score in zip(batch_rewards, batch_score)]
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
             self._log_progress(np.mean(batch_score), ep_steps)
             ep_steps += 1
         data_collector.close_scenario()
