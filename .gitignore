@@ -158,3 +158,5 @@ collected_observations/
 # Experiments
 outputs/
 vaw/
+
+training_stats/*

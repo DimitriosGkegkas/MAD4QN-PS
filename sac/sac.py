@@ -11,7 +11,7 @@ class SAC(object):
     def __init__(self, input_dims, tau, n_actions, gamma=0.99,
                  max_size=1000000,lr = 0.001, alpha = 0.2,
                  policy_type='Gaussian', target_update_interval=1,
-                 automatic_entropy_tuning=False,
+                 automatic_entropy_tuning=True,
                  batch_size=64, algo=None, env_name=None, chkpt_dir='tmp/dqn', training_stats_path='tmp/dqn_stats'):
         self.alpha = alpha
         self.gamma = gamma
@@ -73,7 +73,7 @@ class SAC(object):
     def learn(self):
         # Sample a batch from memory
         if (len(self.memory) < self.batch_size):
-            return
+            return 0, 0, 0, 0, 0
         state_batch, action_batch, reward_batch, next_state_batch, mask_batch = self.memory.sample(batch_size=self.batch_size)
 
         state_batch = torch.FloatTensor(state_batch).to(self.device)

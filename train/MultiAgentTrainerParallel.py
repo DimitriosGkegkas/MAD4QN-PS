@@ -9,6 +9,7 @@ from utils import position2road, roads2t_i
 from datetime import datetime
 import sys
 import os
+from torch.utils.tensorboard import SummaryWriter
 
 class MultiAgentTrainerParallel:
     def __init__(
@@ -42,12 +43,14 @@ class MultiAgentTrainerParallel:
         self.agents = {}
         self.training_stats_path = None
         if not self.evaluate:
-            self.training_stats_path = os.path.join(
-                    "training_stats",
-                    self.algorithm_identifier,
-                    self.timestamp,
-            )
+            # Dynamically build experiment identifier
+            run_name = f"{self.algorithm_identifier}_{self.timestamp}"
+
+            self.training_stats_path = os.path.join("training_stats", run_name)
             os.makedirs(self.training_stats_path, exist_ok=True)
+
+            self.writer = SummaryWriter(os.path.join(self.training_stats_path, "tensorboard"))
+
 
     def initialize_environment(self, agent_spec, scenario_subdir="scenarios/sumo/multi_scenario", parallel=True):
         torch.manual_seed(self.args.seed)
@@ -154,20 +157,26 @@ class MultiAgentTrainerParallel:
     def _run_episode(self):
         self.evaluate = False
         batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
-        ep_steps = 0
-        while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000:
+
+        self.ep_steps = 0
+        batch_score = np.zeros(len(batch_rewards))  # One total per scenario (parallel envs)
+
+        while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and self.ep_steps < 1000:
             
             batch_agent_actions = self._batch_select_actions(
                 batch_turning_intentions, 
                 batch_observations, 
                 batch_terminated, 
                 batch_truncated
-                )
+            )
             
             batch_observations_, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.step(
                 batch_agent_actions
             )
-            
+
+            # Accumulate rewards per scenario
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
+
             self._batch_store_transitions(
                 batch_observations, 
                 batch_agent_actions, 
@@ -176,15 +185,21 @@ class MultiAgentTrainerParallel:
                 batch_terminated, 
                 batch_truncated, 
                 batch_turning_intentions
-                )
+            )
+
             self._update_agents()
             batch_observations = batch_observations_
             self.n_steps += 1
-            ep_steps += 1
-            
-        self._log_progress(0, ep_steps)
+            self.ep_steps += 1
+            self._log_progress(np.mean(batch_score), self.ep_steps)
+
+
+        if hasattr(self, 'writer'):
+            self.writer.add_histogram('reward/train_distribution', np.array(batch_score), self.n_episodes)
+            self.writer.add_scalar('reward/train', np.mean(batch_score), self.n_episodes)
         self.n_episodes += 1
         self._evaluate_if_needed()
+
         
     def _get_turning_intention(self, infos):
         turning_intentions = {}
@@ -282,8 +297,15 @@ class MultiAgentTrainerParallel:
                     )
 
     def _update_agents(self):
-        for agent in self.agents.values():
-            agent.learn()
+        for agentKey in self.agents.keys():
+            agent = self.agents[agentKey]
+            critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.learn()
+
+            self.writer.add_scalar(agentKey + '/loss/critic_1', critic_1_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/critic_2', critic_2_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/policy', policy_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/entropy_loss', ent_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/entropy_temprature/alpha', alpha, self.ep_steps)
 
     def _set_best_score(self):
         self.load_scores()
@@ -331,6 +353,9 @@ class MultiAgentTrainerParallel:
             for reward in rewards[0: len(ids)]:
                 batch_rewards.append(reward)
             self._log_percentage(len(batch_rewards) / eval_episodes)
+        if hasattr(self, 'writer'):
+            self.writer.add_scalar('reward/eval', np.mean(batch_rewards), self.n_episodes)
+            self.writer.add_histogram('reward/eval_distribution', np.array(batch_rewards), self.n_episodes)
 
         self.evaluate = False
         self.env.modify_probs(batch_rewards)
@@ -354,6 +379,8 @@ class MultiAgentTrainerParallel:
             batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
             ep_steps += 1
         return batch_score
+    
+
     def envision(self, id):
         print("\n----------------------------------------------------------------------------")
         print(f"Starting envisioning phase")
