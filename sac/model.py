@@ -78,41 +78,50 @@ class QNetwork(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 4, stride=1)
         self.conv3 = nn.Conv2d(64, 128, 3, stride=1)
         self.conv4 = nn.Conv2d(128, 64, 3, stride=1)
-        self.pool = nn.MaxPool2d(2, 2)
+        self.pool1 = nn.MaxPool2d(2, 2)
+        self.pool2 = nn.MaxPool2d(2, 2)
+
         
         # Dropout after conv layers (optional)
-        self.dropout_conv = nn.Dropout2d(p=dropout_prob)
+        self.dropout_conv1 = nn.Dropout2d(p=dropout_prob)
+        self.dropout_conv2 = nn.Dropout2d(p=dropout_prob)
+
 
         num_inputs = self.calculate_conv_output_dims(input_dims)
-        self.input = nn.Linear(num_inputs, 12)
+        self.input1 = nn.Linear(num_inputs, 1024)
+        self.input2 = nn.Linear(1024, 32)
+
 
         # Q1 architecture
-        self.linear1 = nn.Linear(12 + num_actions, 128)
+        self.linear1 = nn.Linear(32 + num_actions, 64)
         self.dropout1 = nn.Dropout(p=dropout_prob)
-        self.linear2 = nn.Linear(128, 128)
+        self.linear2 = nn.Linear(64, 32)
         self.dropout2 = nn.Dropout(p=dropout_prob)
-        self.linear3 = nn.Linear(128, 1)
+        self.linear3 = nn.Linear(32, 1)
 
         # Q2 architecture
-        self.linear4 = nn.Linear(12 + num_actions, 128)
+        self.linear4 = nn.Linear(32 + num_actions, 64)
         self.dropout3 = nn.Dropout(p=dropout_prob)
-        self.linear5 = nn.Linear(128, 128)
+        self.linear5 = nn.Linear(64, 32)
         self.dropout4 = nn.Dropout(p=dropout_prob)
-        self.linear6 = nn.Linear(128, 1)
+        self.linear6 = nn.Linear(32, 1)
 
         self.apply(weights_init_)
 
     def forward(self, state, action):
         # Conv layers with optional dropout
-        layer1 = self.pool(F.relu(self.conv1(state)))
-        layer2 = self.pool(F.relu(self.conv2(layer1)))
+        layer1 = self.pool1(F.relu(self.conv1(state)))
+        layer2 = F.relu(self.conv2(layer1))
         layer3 = F.relu(self.conv3(layer2))
-        layer3 = self.dropout_conv(layer3)
+        layer3 = self.dropout_conv1(layer3)
         layer4 = F.relu(self.conv4(layer3))
-        layer4 = self.dropout_conv(layer4)
+        layer4 = self.dropout_conv2(layer4)
 
         flat = layer4.view(layer4.size()[0], -1)
-        input = self.input(flat)
+        input = F.relu(self.input1(flat))
+        input = F.relu(self.input2(input))
+
+
 
         xu = torch.cat([input, action], 1)
 
@@ -134,8 +143,8 @@ class QNetwork(nn.Module):
 
     def calculate_conv_output_dims(self, input_dims):
         state = torch.zeros(1, *input_dims)
-        dims = self.pool(F.relu(self.conv1(state)))
-        dims = self.pool(F.relu(self.conv2(dims)))
+        dims = self.pool1(F.relu(self.conv1(state)))
+        dims = F.relu(self.conv2(dims))
         dims = F.relu(self.conv3(dims))
         dims = F.relu(self.conv4(dims))
         return int(np.prod(dims.size()))
@@ -149,21 +158,28 @@ class GaussianPolicy(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 4, stride=1)
         self.conv3 = nn.Conv2d(64, 128, 3, stride=1)
         self.conv4 = nn.Conv2d(128, 64, 3, stride=1)
-        self.pool = nn.MaxPool2d(2, 2)
+        self.pool1 = nn.MaxPool2d(2, 2)
+        self.pool2 = nn.MaxPool2d(2, 2)
+
 
         # Dropout for conv layers (optional)
-        self.dropout_conv = nn.Dropout2d(p=dropout_prob)
+        self.dropout_conv1 = nn.Dropout2d(p=dropout_prob)
+        self.dropout_conv2 = nn.Dropout2d(p=dropout_prob)
+
+
 
         num_inputs = self.calculate_conv_output_dims(input_dims)
 
+        self.input1 = nn.Linear(num_inputs, 1024)
+        self.input2 = nn.Linear(1024, 128)
         # Fully connected layers
-        self.linear1 = nn.Linear(num_inputs, 128)
+        self.linear1 = nn.Linear(128, 128)
         self.dropout1 = nn.Dropout(p=dropout_prob)
-        self.linear2 = nn.Linear(128, 128)
+        self.linear2 = nn.Linear(128, 32)
         self.dropout2 = nn.Dropout(p=dropout_prob)
 
-        self.mean_linear = nn.Linear(128, num_actions)
-        self.log_std_linear = nn.Linear(128, num_actions)
+        self.mean_linear = nn.Linear(32, num_actions)
+        self.log_std_linear = nn.Linear(32, num_actions)
 
         self.action_scale = torch.tensor(1.)
         self.action_bias = torch.tensor(0.)
@@ -172,23 +188,25 @@ class GaussianPolicy(nn.Module):
 
     def calculate_conv_output_dims(self, input_dims):
         state = torch.zeros(1, *input_dims)
-        dims = self.pool(F.relu(self.conv1(state)))
-        dims = self.pool(F.relu(self.conv2(dims)))
+        dims = self.pool1(F.relu(self.conv1(state)))
+        dims = F.relu(self.conv2(dims))
         dims = F.relu(self.conv3(dims))
         dims = F.relu(self.conv4(dims))
         return int(np.prod(dims.size()))
 
     def forward(self, state):
-        layer1 = self.pool(F.relu(self.conv1(state)))
-        layer2 = self.pool(F.relu(self.conv2(layer1)))
+        layer1 = self.pool1(F.relu(self.conv1(state)))
+        layer2 = F.relu(self.conv2(layer1))
         layer3 = F.relu(self.conv3(layer2))
-        layer3 = self.dropout_conv(layer3)
+        layer3 = self.dropout_conv1(layer3)
         layer4 = F.relu(self.conv4(layer3))
-        layer4 = self.dropout_conv(layer4)
+        layer4 = self.dropout_conv2(layer4)
 
         flat = layer4.view(layer4.size()[0], -1)
+        input = F.relu(self.input1(flat))
+        input = F.relu(self.input2(input))
 
-        x = F.relu(self.linear1(flat))
+        x = F.relu(self.linear1(input))
         x = self.dropout1(x)
         x = F.relu(self.linear2(x))
         x = self.dropout2(x)
