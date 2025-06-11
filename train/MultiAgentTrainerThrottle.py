@@ -1,13 +1,75 @@
 
 import os
-from sac.sac import SAC
-from train.MultiAgentTrainerParallel import MultiAgentTrainerParallel
-from ddpg.ddpg_agent import DDPGAgent
+import pathlib
+from typing import Union
+import numpy as np
+from dqn.dueling_ddqn_agent import DuelingDDQNAgent
+import torch
+from statistics.experiment_data_collector import ExperimentDataCollector
+from environment import make_env, make_env_parallel
+from utils import position2road, roads2t_i
+from datetime import datetime
+import sys
+from torch.utils.tensorboard import SummaryWriter
+from Agent import Agent
 
-class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
-    def format_action(self, action):
-        # print(action)
-        return action[0]
+class MultiAgentTrainerParallel:
+    def __init__(
+        self,
+        args,
+        batch_size=256,
+        best_score=-1000.0,
+        total_steps=int(1e6),
+        agent_count=4,
+        algorithm_identifier='DuelingDDQNAgents',
+        evaluation_step=10,
+        num_env = 1,
+        evaluation = False,
+    ):
+        self.args = args
+        self.batch_size = batch_size
+        self.best_score = best_score
+        self.total_steps = total_steps
+        self.agent_count = agent_count
+        self.start_time = datetime.now()
+        self.evaluation_step = evaluation_step
+        self.n_steps = 0
+        self.n_episodes = 0
+        self.scores_list = []
+        self.scores_per_scenario_list = []
+        self.num_env = num_env
+        
+        self.algorithm_identifier = algorithm_identifier
+        self.evaluate = evaluation
+        self.timestamp = datetime.now().strftime("%d%m%Y")
+        self.agents = {}
+        self.training_stats_path = None
+        if not self.evaluate:
+            # Dynamically build experiment identifier
+            run_name = f"{self.algorithm_identifier}_{self.timestamp}"
+
+            self.training_stats_path = os.path.join("training_stats", run_name)
+            os.makedirs(self.training_stats_path, exist_ok=True)
+
+            self.writer = SummaryWriter(os.path.join(self.training_stats_path, "tensorboard"))
+
+    def initialize_environment(self, agent_spec, scenario_subdir="scenarios/sumo/multi_scenario", parallel=True):
+        torch.manual_seed(self.args.seed)
+        np.random.seed(self.args.seed)
+
+        self.agent_names = [f"Agent-{i}" for i in range(self.agent_count)]
+        agent_interfaces = {agent_id: agent_spec.interface for agent_id in self.agent_names}
+
+        scenarios_path = pathlib.Path(__file__).absolute().parent.parent / scenario_subdir
+        self.scenarios = [str(scenario) for scenario in scenarios_path.iterdir() if not scenario.is_file()]
+        self.scenarios.sort()
+        
+        
+        if parallel:
+            self.env = make_env_parallel("smarts.env:hiway-v1", agent_interfaces, self.scenarios, True, self.args.seed, num_env= self.num_env)
+        
+        self.single_env = make_env("smarts.env:hiway-v1", agent_interfaces, self.scenarios, False, self.args.seed, True)
+    
     def initialize_agents(
         self,
         batch_size=256/4,
@@ -28,10 +90,10 @@ class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
             )
             os.makedirs(chkpt_dir, exist_ok=True)
 
-        input_dims = self.env.observation_space.shape
+        input_dim = self.env.observation_space.shape
         agent_params = {
             'lr': lr,
-            'input_dims': input_dims,   
+            'input_dim': input_dim,   
             'tau': tau,    
             'n_actions': n_actions,
             'gamma': gamma,
@@ -41,17 +103,432 @@ class MultiAgentTrainerThrottle (MultiAgentTrainerParallel):
             'chkpt_dir': chkpt_dir,
             'training_stats_path': self.training_stats_path,
         }
-        self.agents = {
-            'straight': SAC(
-                **agent_params,
-                env_name=f'agent_straight'
-            ),
-            'left': SAC(
-                **agent_params,
-                env_name=f'agent_left'
-            ),
-            'right': SAC(
-                **agent_params,
-                env_name=f'agent_right'
+        self.agent = Agent(**agent_params)
+    
+    def preload(self, path, evaluate = False):
+        self.load_models(path, evaluate)
+
+    def load_models(self, path, evaluate = False):
+        for agent in self.agents.values():
+            agent.load_models(path, evaluate)
+
+    def train(self):
+        while self.n_steps < self.total_steps:
+            self._run_episode()
+                     
+    def step(self, batch_agent_actions):
+        """
+        Takes a step in the environment with the given batch of agent actions.
+
+        Args:
+            batch_agent_actions (list): A list of dictionaries containing agent actions.
+
+        Returns:
+            tuple: A tuple containing observations, rewards, terminated flags, truncated flags, and info.
+        """
+        observations, rewards, terminated, truncated, infos = self.env.step(
+            [
+                {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()}
+                for agent_actions in batch_agent_actions
+            ]
+        )
+        return observations, rewards, terminated, truncated, infos
+
+    def _run_episode(self):
+        self.evaluate = False
+        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode()
+
+        self.ep_steps = 0
+        batch_score = np.zeros(len(batch_rewards))  # One total per scenario (parallel envs)
+
+        while not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and self.ep_steps < 1000:
+            
+            batch_agent_actions = self._batch_select_actions(
+                batch_turning_intentions, 
+                batch_observations, 
+                batch_terminated, 
+                batch_truncated
             )
-        }
+            
+            batch_observations_, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.step(
+                batch_agent_actions
+            )
+
+            # Accumulate rewards per scenario
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
+
+            self._batch_store_transitions(
+                batch_observations, 
+                batch_agent_actions, 
+                batch_rewards, 
+                batch_observations_, 
+                batch_terminated, 
+                batch_truncated, 
+                batch_turning_intentions
+            )
+
+            self._update_agents()
+            batch_observations = batch_observations_
+            self.n_steps += 1
+            self.ep_steps += 1
+            self._log_progress(np.mean(batch_score), self.ep_steps)
+
+
+        if hasattr(self, 'writer'):
+            self.writer.add_histogram('reward/train_distribution', np.array(batch_score), self.n_episodes)
+            self.writer.add_scalar('reward/train', np.mean(batch_score), self.n_episodes)
+        self.n_episodes += 1
+        self._evaluate_if_needed()
+  
+    def _get_turning_intention(self, infos):
+        turning_intentions = {}
+        for k in self.agent_names:
+            start = position2road([infos[k]['env_obs'][5].mission.start.position.x, infos[k]['env_obs'][5].mission.start.position.y])
+            goal = position2road([infos[k]['env_obs'][5].mission.goal.position.x, infos[k]['env_obs'][5].mission.goal.position.y])
+            turning_intentions[k] = roads2t_i[start + goal]
+        return turning_intentions
+    
+    def _batch_get_turning_intentions(self, batch_infos):
+        batch_turning_intentions = []
+        for infos in batch_infos:
+            turning_intentions = self._get_turning_intention(infos)
+            batch_turning_intentions.append(turning_intentions)
+        return batch_turning_intentions
+        
+    def _initialize_episode(self, id = None):
+        if id is not None:
+            self.single_env.set_scenario(id)
+        observations, infos = self.single_env.reset()
+        turning_intentions = self._get_turning_intention(infos)
+        terminated, truncated = {agent_id: False for agent_id in self.agent_names}, {agent_id: False for agent_id in self.agent_names}
+        rewards = {agent_id: 0 for agent_id in self.agent_names}
+        return turning_intentions, observations, terminated, truncated, rewards, infos
+
+    def _batch_initialize_episode(self, ids = None):
+        if ids is not None:
+            self.env.set_scenario(ids)
+        batch_observations, batch_infos = self.env.reset()
+        batch_turning_intentions = self._batch_get_turning_intentions(batch_infos)
+        terminated, truncated = {agent_id: False for agent_id in self.agent_names}, {agent_id: False for agent_id in self.agent_names}
+        terminated["__all__"] = False
+        truncated["__all__"] = False
+        rewards = {agent_id: 0 for agent_id in self.agent_names}
+        batch_terminated = [terminated for _ in range(len(batch_observations))]
+        batch_truncated = [truncated for _ in range(len(batch_observations))]
+        batch_rewards = [rewards for _ in range(len(batch_observations))]
+        return batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos
+
+    def _is_episode_ended(self, observations, rewards, terminated, info):
+        return  (
+                    -10 in rewards.values() or
+                    len(observations) == 0 
+                    # or all(reward == -1 for reward in rewards) They have to learn not to stop
+                    or ("__all__" in terminated and terminated["__all__"])
+                ) \
+                and (not info["social_traffic"])
+
+    def _batch_is_episode_ended(self, batch_observations, batch_rewards, batch_terminated, batch_infos):
+        """
+            Returns true if all the observations foreach batch are empty or the ep_steps is greater than 1000
+            also if the rewards are -1 for all the agents for all the scenarios
+        """
+        return  all([
+            self._is_episode_ended(observations, rewards, terminated, info) \
+                for observations, rewards, terminated, info \
+                    in zip(batch_observations, batch_rewards, batch_terminated, batch_infos)])
+    
+    def act(self, obs, turning_intention):
+        return self.agents[turning_intention].choose_action(obs, self.evaluate)
+        
+    def format_action(self, action):
+        return action[0]
+
+    def _batch_select_actions(self, batch_turning_intentions, batch_observations, batch_terminated, batch_truncated):
+        batch_agent_actions = []
+        for observations, terminated, truncated, turning_intentions in zip(batch_observations, batch_terminated, batch_truncated, batch_turning_intentions):
+            agent_action = self._select_actions(turning_intentions, observations, terminated, truncated)
+            batch_agent_actions.append(agent_action)
+        return batch_agent_actions 
+    
+    def _select_actions(self, turning_intentions, observations, terminated, truncated):
+        agent_actions = {}
+        for idx, agent_name in enumerate(self.agent_names):
+            if agent_name in observations and not terminated[agent_name] and not truncated[agent_name]:
+                agent_actions[agent_name] = self.act(observations[agent_name], turning_intentions[agent_name])
+        return agent_actions
+    
+    def  _batch_store_transitions(self, batch_observations, batch_agent_actions, batch_agent_rewards, batch_observations_, batch_terminated, batch_truncated, batch_turning_intentions):
+        for observations, agent_actions, agent_rewards, observations_, terminated, truncated, turning_intentions in zip(batch_observations, batch_agent_actions, batch_agent_rewards, batch_observations_, batch_terminated, batch_truncated, batch_turning_intentions):
+            self._store_transitions(observations, agent_actions, agent_rewards, observations_, terminated, truncated, turning_intentions)
+
+    def _store_transitions(self, observations, agent_actions, agent_rewards, observations_, terminated, truncated, turning_intentions):
+        for idx, agent_name in enumerate(self.agent_names):
+            if agent_name in observations and agent_name in observations_:
+                self.agents[turning_intentions[agent_name]].store_transition(
+                    observations[agent_name], 
+                    agent_actions[agent_name], 
+                    agent_rewards[agent_name], 
+                    observations_[agent_name], 
+                    done=(terminated[agent_name] or truncated[agent_name])
+                    )
+
+    def _update_agents(self):
+        for agentKey in self.agents.keys():
+            agent = self.agents[agentKey]
+            critic_1_loss, critic_2_loss, policy_loss, ent_loss, alpha = agent.learn()
+
+            self.writer.add_scalar(agentKey + '/loss/critic_1', critic_1_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/critic_2', critic_2_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/policy', policy_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/loss/entropy_loss', ent_loss, self.ep_steps)
+            self.writer.add_scalar(agentKey + '/entropy_temprature/alpha', alpha, self.ep_steps)
+
+    def _set_best_score(self):
+        self.load_scores()
+        scores, scores_per_scenario = self.eval()
+        elapsed_time = datetime.now() - self.start_time 
+        self.scores_list.append((scores, str(elapsed_time)))
+        self.scores_per_scenario_list.append(scores_per_scenario)
+        self.best_score = scores
+        self.save_scores()
+            
+    def _evaluate_if_needed(self):
+        if self.n_episodes % self.evaluation_step == 0:
+            scores, scores_per_scenario = self.eval()
+            elapsed_time = datetime.now() - self.start_time 
+            self.scores_list.append((scores, str(elapsed_time), self.n_steps))
+            self.scores_per_scenario_list.append(scores_per_scenario)
+            if scores > self.best_score:
+                for agent in self.agents.values():
+                    agent.save_models()
+                self.best_score = scores
+            self.save_scores()
+
+    def save_scores(self):
+        np.save(os.path.join(self.training_stats_path, "avg_reward.npy"), np.array(self.scores_list, dtype=object))
+        np.save(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), np.array(self.scores_per_scenario_list))
+
+    def load_scores(self):
+        try:
+            self.scores_list = np.load(os.path.join(self.training_stats_path, "avg_reward.npy"), allow_pickle=True).tolist()
+            self.scores_per_scenario_list = np.load(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), allow_pickle=True).tolist()
+        except:
+            self.scores_list = []
+            self.scores_per_scenario_list = []
+
+    def eval(self):
+        print("\n----------------------------------------------------------------------------")
+        print(f"Starting evaluation phase")
+        eval_episodes = len(self.scenarios)
+        self.evaluate = True
+        batch_rewards = []
+        self._log_percentage(0)
+        for ids in self.slice_list(list(range(eval_episodes)), self.num_env):
+            rewards = self._eval_episodes(ids)
+            for reward in rewards[0: len(ids)]:
+                batch_rewards.append(reward)
+            self._log_percentage(len(batch_rewards) / eval_episodes)
+        if hasattr(self, 'writer'):
+            self.writer.add_scalar('reward/eval', np.mean(batch_rewards), self.n_episodes)
+            self.writer.add_histogram('reward/eval_distribution', np.array(batch_rewards), self.n_episodes)
+
+        self.evaluate = False
+        self.env.modify_probs(batch_rewards)
+        print(f"\nEvaluation over {eval_episodes} episodes: {np.mean(batch_rewards):.3f}")
+        print("----------------------------------------------------------------------------")
+        return  np.mean(batch_rewards), batch_rewards
+
+    def _eval_episodes(self, ids):
+        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode(ids)
+        ep_steps = 0
+        batch_score = [0 for _ in range(len(batch_observations))]
+        while (not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000) or ep_steps < 1:
+            
+            batch_agent_actions = self._batch_select_actions(batch_turning_intentions, batch_observations, batch_terminated, batch_truncated)
+            batch_observations, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.env.step(
+                [ 
+                   {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()} for agent_actions in batch_agent_actions
+                ]
+            )
+            
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
+            ep_steps += 1
+        return batch_score
+    
+    def envision(self, id):
+        print("\n----------------------------------------------------------------------------")
+        print(f"Starting envisioning phase")
+        self.evaluate = True
+        self._envision_episode(id)
+        self.evaluate = False
+        print(f"Envisioning over {id} episode")
+        print("----------------------------------------------------------------------------")
+        return
+    
+    def _envision_episode(self, id):
+        self.evaluate = True
+        turning_intentions, observations, terminated, truncated, rewards, info = self._initialize_episode(id)
+        print(turning_intentions)
+        ep_steps = 0
+        while (not self._is_episode_ended(observations, rewards, terminated, info)) or ep_steps < 1:
+            agent_actions = self._select_actions(turning_intentions, observations, terminated, truncated)
+            observations, rewards, terminated, truncated, info = self.single_env.step(
+                {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()}
+            )
+            ep_steps += 1
+        return
+
+    def _full_eval_episodes(self, ids, data_collector: ExperimentDataCollector):
+        batch_turning_intentions, batch_observations, batch_terminated, batch_truncated, batch_rewards, batch_infos = self._batch_initialize_episode(ids)
+        ep_steps = 0
+        data_collector.start_new_scenarios(ids, batch_turning_intentions)
+        batch_score = [0 for _ in range(len(batch_observations))]
+        print(f"Starting evaluation of {len(ids)} episodes")
+        while (not self._batch_is_episode_ended(batch_observations, batch_rewards, batch_terminated, batch_infos) and  ep_steps < 1000) or ep_steps < 1:
+            
+            batch_agent_actions = self._batch_select_actions(batch_turning_intentions, batch_observations, batch_terminated, batch_truncated)
+            batch_observations, batch_rewards, batch_terminated, batch_truncated, batch_infos = self.env.step(
+                [ 
+                   {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()} for agent_actions in batch_agent_actions
+                ]
+            )
+            self._extract_scenario_data_batch(ids, batch_observations, batch_infos, data_collector)
+            batch_score = [sum(rewards.values()) + score for rewards, score in zip(batch_rewards, batch_score)]
+            self._log_progress(np.mean(batch_score), ep_steps)
+            ep_steps += 1
+        data_collector.close_scenario()
+        return batch_score
+    
+    def _full_eval_episode(self, id, data_collector: ExperimentDataCollector):
+        turning_intentions, observations, terminated, truncated, rewards, info = self._initialize_episode(id)
+        ep_steps = 0
+        data_collector.start_new_scenarios([id], [turning_intentions])
+        while (not self._is_episode_ended(observations, rewards, terminated, info) and ep_steps < 1000) or ep_steps < 1: 
+            agent_actions = self._select_actions(turning_intentions, observations, terminated, truncated)
+            observations, rewards, terminated, truncated, info = self.single_env.step(
+                {agent_name: self.format_action(agent_action) for agent_name, agent_action in agent_actions.items()}
+            )
+            self._extract_scenario_data(id, observations, info, data_collector)
+            ep_steps += 1
+        data_collector.close_scenario()
+    
+    def _extract_scenario_data_batch(self, ids, batch_observations, batch_infos, data_collector: ExperimentDataCollector):
+        for id, observations, infos in zip(ids, batch_observations, batch_infos):
+            self._extract_scenario_data(id, observations, infos, data_collector)
+            
+    def _get_directional_acceleration(self, linear_velocity, linear_acceleration):
+        speed = np.linalg.norm(linear_velocity)
+        if speed > 0:
+            velocity_direction = linear_velocity / speed
+        else:
+            velocity_direction = np.zeros_like(linear_velocity)
+        acceleration = np.dot(linear_acceleration, velocity_direction)
+        return acceleration
+        
+    def _extract_scenario_data(self, id, observations, infos, data_collector:Union[ExperimentDataCollector]):
+        for agent_id in self.agent_names:
+            if agent_id in observations:
+                velocity =infos[agent_id]['env_obs'].ego_vehicle_state.linear_velocity
+                acceleration = infos[agent_id]['env_obs'].ego_vehicle_state.linear_acceleration
+                jerk = np.linalg.norm(infos[agent_id]['env_obs'].ego_vehicle_state.linear_jerk)
+                speed = np.linalg.norm(velocity)
+                acceleration = self._get_directional_acceleration(velocity, acceleration)
+                time_separation = infos[agent_id]['time_separation']
+                
+                dt = infos[agent_id]['env_obs'].dt
+                travel_distance = infos[agent_id]['env_obs'].distance_travelled
+                is_waiting = (speed < 0.1)
+
+                data_collector.record_agent_data(
+                    agent_id,
+                    speed=speed,
+                    acceleration=acceleration,
+                    jerk=jerk,
+                    dt=dt,
+                    travel_distance=travel_distance,
+                    time_separation=time_separation,
+                    is_waiting=is_waiting,
+                    scenario_id=id,
+                )
+                if infos[agent_id]['env_obs'].events.collisions:
+                    data_collector.mark_agent_crashed(agent_id, id)
+
+                if infos[agent_id]['env_obs'].events.reached_goal:
+                    data_collector.mark_agent_succeeded(agent_id, id)
+        for social_traffic in infos["social_traffic"]:
+            data_collector.add_social_vehicle(social_traffic["id"], id)
+            velocity = social_traffic["linear_velocity"]
+            acceleration = social_traffic["linear_acceleration"]
+            jerk = np.linalg.norm(social_traffic["linear_jerk"])
+            speed = np.linalg.norm(velocity)
+            acceleration = self._get_directional_acceleration(velocity, acceleration)
+            time_separation = social_traffic["time_separation"]
+
+            data_collector.record_agent_data(
+                    social_traffic["id"],
+                    speed=speed,
+                    acceleration=acceleration,
+                    jerk=jerk,
+                    dt=social_traffic["dt"],
+                    travel_distance=social_traffic["travel_distance"],
+                    time_separation=time_separation,
+                    is_waiting=(social_traffic["speed"] < 0.1),
+                    scenario_id=id,
+                )
+
+    def collect_statistics(self, parallel = True):
+        eval_episodes = len(self.scenarios)
+        self.evaluate = True
+        all_rewards = []
+        if parallel:
+            data_collector = ExperimentDataCollector(self.algorithm_identifier)
+            for ids in self.slice_list(list(range(eval_episodes)), self.num_env):
+                batch_rewards = self._full_eval_episodes(ids, data_collector)
+                all_rewards.extend(batch_rewards)
+            data_collector.save_raw_data()
+            print(f'Finished evaluation in parallel')
+            print(f'Average reward: {np.mean(all_rewards):.3f}')
+        else:
+            data_collector = ExperimentDataCollector(self.algorithm_identifier)
+            for id in range(eval_episodes):
+                self._full_eval_episode(id, data_collector)
+            data_collector.save_raw_data()
+        print(f'Finished evaluation')
+        self.evaluate = False
+        return
+    
+    def _log_progress(self, score, ep_steps):
+        elapsed_time = datetime.now() - self.start_time
+        total_seconds = int(elapsed_time.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        sys.stdout.write(
+            f"\r Epi: {self.n_episodes} | St.: {ep_steps} | Re.: {score:.2f} | Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
+        )
+        sys.stdout.flush()
+
+    def _log_percentage(self, percentage):
+        """
+            percentage: float
+
+        """
+        dotes_to_display = int(percentage * 20) * "-" + int((1 - percentage) * 20) * "_"
+        sys.stdout.write(
+            f"\r [{dotes_to_display}] {percentage * 100:.2f}%"
+        )
+        sys.stdout.flush()
+    
+    def slice_list(self, lst, n):
+        """
+        Yields slices of the list, each containing up to n elements.
+
+        Args:
+            lst (list): The list to be sliced.
+            n (int): The size of each chunk.
+
+        Yields:
+            list: A slice of the list with up to n elements.
+        """
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]

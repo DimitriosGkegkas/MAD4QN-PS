@@ -1,0 +1,47 @@
+from typing import Dict, List, Any
+
+class EpisodeManager:
+    def __init__(self, agent_names: List[str]):
+        self.agent_names = agent_names
+
+    def is_episode_done(
+        self,
+        observations: Dict[str, Any],
+        rewards: Dict[str, float],
+        terminated: Dict[str, bool],
+        info: Dict[str, Any],
+    ) -> bool:
+        """
+        Determines if a single episode is done based on reward signals,
+        observation presence, termination flags, and custom info flags.
+        """
+        return self._has_negative_reward(rewards) or self._is_episode_terminated(observations, terminated, info)
+
+    def is_batch_episode_done(
+        self,
+        batch_observations: List[Dict[str, Any]],
+        batch_rewards: List[Dict[str, float]],
+        batch_terminated: List[Dict[str, bool]],
+        batch_infos: List[Dict[str, Any]],
+    ) -> bool:
+        """
+        Determines if all episodes in a batch are done.
+        """
+        return all(
+            self.is_episode_done(obs, rew, term, inf)
+            for obs, rew, term, inf in zip(batch_observations, batch_rewards, batch_terminated, batch_infos)
+        )
+
+    def _has_negative_reward(self, rewards: Dict[str, float]) -> bool:
+        return -10 in rewards.values()
+
+    def _is_episode_terminated(
+        self,
+        observations: Dict[str, Any],
+        terminated: Dict[str, bool],
+        info: Dict[str, Any],
+    ) -> bool:
+        no_observations = len(observations) == 0
+        terminated_all = terminated.get("__all__", False)
+        no_social_traffic = not info.get("social_traffic", True)
+        return (no_observations or terminated_all) and no_social_traffic

@@ -4,7 +4,7 @@ from turtle import distance
 import gymnasium as gym
 import numpy as np
 from sympy import E
-from utils import position2road, roads2t_i, has_conflict, has_conflict_v2v
+from utils import position2road, roads2t_i, has_conflict, has_conflict_v2v, road_2_comunication
 from smarts.core.sensor import AccelerometerSensor
 
 from utils.debug import debug_save_any_img
@@ -28,10 +28,11 @@ class AgentInformationHelper():
     
         
     def set_turning_intention(self, mission):
-        start = position2road([mission.start.position.x, mission.start.position.y])
+        self.start = position2road([mission.start.position.x, mission.start.position.y])
         goal = position2road([mission.goal.position.x, mission.goal.position.y])
-        self.roads = start + goal
+        self.roads = self.start + goal
         self.turning_intention = roads2t_i[self.roads]
+
         return self.turning_intention
     
     def check_time_separation(self, time_separation):
@@ -78,11 +79,24 @@ class AgentsInformationController():
         self.set_conflicts()
         
     def set_agents(self):
+        start = {}
+        start_inverse = {}
         for agent_name in self.agent_names:
             if agent_name in self.info:
                 ego = self.info[agent_name]["env_obs"]
                 self.agents[agent_name] = AgentInformationHelper(agent_name, ego.ego_vehicle_state.position, ego[5].mission)
+                start[self.agents[agent_name].start] = agent_name
+                start_inverse[agent_name] = self.agents[agent_name].start
+        
+        # communication map
+        self.communication_map = {}
+        for agent_name in start_inverse.keys():
+            self.communication_map[agent_name] = [start[pos] for pos in road_2_comunication[start_inverse[agent_name]]]
+            
         return self.agents
+    
+    def get_communication_map(self):
+        return self.communication_map
     
     def extract_direction_code(self, id_string):
         # Split the string by "-edge-"
@@ -199,6 +213,13 @@ class AgentsInformationController():
                 turning_intentions[agent_name] = self.agents[agent_name].turning_intention
         return turning_intentions
     
+    def get_communication_map(self):
+        turning_intentions = {}
+        for agent_name in self.agent_names:
+            if agent_name in self.info:
+                turning_intentions[agent_name] = self.agents[agent_name].turning_intention
+        return turning_intentions
+    
     def set_conflicts(self):
         self.conflicts = {}
         for ego in self.agents:
@@ -233,7 +254,17 @@ class InfoWrapper(gym.Wrapper):
         observation, info = self.env.reset(**kwargs)
         info = self._add_social_traffic_info(info)
         self.agents_information_controller.reset(info)
-        return observation, info
+        # create dummy termination, truncation, reward, with false and 0 for each agent
+        termination = {agent_name: False for agent_name in self.agent_names}
+        truncation = {agent_name: False for agent_name in self.agent_names}
+        reward = {agent_name: 0 for agent_name in self.agent_names}
+        raw_message = {agent_name: None for agent_name in self.agent_names}
+        message = {agent_name: None for agent_name in self.agent_names}
+        
+        return self.agents_information_controller.get_turning_intention(),  self.agents_information_controller.get_communication_map(), message, raw_message, observation, termination, truncation, reward, info
+ # TODO this will have to return truning_ intentions, observation, termination, truncation, reward, infos
+    
+    
     def _add_social_traffic_info(self, info: dict) -> dict:
         """
         Adds social traffic information to the info dictionary.

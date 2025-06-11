@@ -92,14 +92,14 @@ class MultiAgentTrainerParallel:
             )
             os.makedirs(chkpt_dir, exist_ok=True)
 
-        input_dims = self.env.observation_space.shape
+        input_dim = self.env.observation_space.shape
         agent_params = {
             'epsilon': epsilon,
             'eps_min': eps_min,
             'eps_dec': eps_dec,
             'gamma': gamma,
             'lr': lr,
-            'input_dims': input_dims,
+            'input_dim': input_dim,
             'n_actions': n_actions,
             'batch_size': batch_size,
             'replace': replace,

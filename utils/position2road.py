@@ -3,6 +3,13 @@ roads2t_i = {'EW': 'straight', 'ES': 'left', 'EN': 'right',
              'SN': 'straight', 'SW': 'left', 'SE': 'right',
              'NS': 'straight', 'NE': 'left', 'NW': 'right'}
 
+road_2_comunication = {
+    'E': ['S', 'W', 'N'],
+    'W': ['N', 'E', 'S'],
+    'S': ['W', 'N', 'E'],
+    'N': ['E', 'S', 'W'],
+}
+
 
 def position2road(position):
     if position[0] > 50:
