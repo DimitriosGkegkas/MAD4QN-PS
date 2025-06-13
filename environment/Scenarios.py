@@ -123,6 +123,10 @@ class Scenarios(gym.Wrapper):
         self.evaluation_scenario = scenario_index
         
     def step(self, action, *args, **kwargs):
+        # I wanna format the action for each agent as a number and not a array fo a single element
+        action ={
+            agent: action[agent][0] for agent in action.keys()
+        }
         return self.env.step(action, *args, **kwargs)
 
     def reset(self, seed=None):

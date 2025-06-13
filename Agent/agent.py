@@ -1,5 +1,6 @@
 import os
 from typing import Any, List, Optional, Tuple
+from matplotlib.style import available
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
@@ -8,14 +9,14 @@ from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncod
 import numpy as np
 
 from Agent.replay_memory import ReplayMemory
-# from  GPUtil import getAvailable
+from  GPUtil import getAvailable
 
 class Agent(object):
     def __init__(
         self,
         input_dim: Tuple[int, int, int] = (3, 32, 32),  # e.g., (C, H, W) for image input
         action_dim: int = 1,
-        direction_dim: int = 2,  # Direction input dimension
+        direction_dim: int = 1,  # Direction input dimension
         feature_dim: int = 100,
         message_dim: int = 8,
         n_agents: int = 4,
@@ -57,12 +58,20 @@ class Agent(object):
 
 
         # === Paths & Device ===
-        self.chkpt_dir = os.path.join(chkpt_dir, env_name or "default")
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.chkpt_dir = chkpt_dir
+        os.makedirs(self.chkpt_dir, exist_ok=True)
+        
+        # available_gpus = getAvailable(order='memory', limit=1)
+        # if available_gpus:
+        #     self.device = torch.device(f"cuda:{available_gpus[0]}")
+        # else:
+        #     self.device = torch.device("cpu")
+        self.device = torch.device("cpu")
+            
 
         # Embedding network
-        self.embedded = EmbeddedNetwork(input_dim=input_dim, feature_dim=feature_dim).to(self.device)
-        self.embedded_target = EmbeddedNetwork(input_dim=input_dim, feature_dim=feature_dim).to(self.device)
+        self.embedded = EmbeddedNetwork(input_dim=input_dim[0], feature_dim=feature_dim).to(self.device)
+        self.embedded_target = EmbeddedNetwork(input_dim=input_dim[0], feature_dim=feature_dim).to(self.device)
         hard_update(self.embedded_target, self.embedded)  # Initialize target network with same weights
         
         # Critic network
@@ -149,9 +158,10 @@ class Agent(object):
             done=done
         )
 
-    def encode_messages(self, message_batch: List[List[torch.Tensor]]) -> torch.Tensor:
+    def encode_messages(self, message_batch: List[List[torch.Tensor]]) -> torch.Tensor:  
+              
         return torch.stack([
-            torch.cat([self.message_encoder(m) for m in raw_msgs], dim=-1)
+            torch.cat([self.message_encoder(torch.Tensor(m).to(self.device)) if m is not None else torch.zeros(self.message_dim).to(self.device) for m in raw_msgs], dim=-1)
             for raw_msgs in message_batch
         ]).to(self.device)  # [B, total_msg_dim]
 
@@ -202,9 +212,9 @@ class Agent(object):
         embedded_next_state = self.embedded_target(next_state_batch)
 
         encoded_current_messages = self.encode_messages(message_batch)
-        encoded_next_messages = self.encode_messages(next_message_batch)
 
         with torch.no_grad():
+            encoded_next_messages = self.encode_messages(next_message_batch)
             next_action, _, _ = self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
             q1_next, q2_next = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
             min_q_next = torch.min(q1_next, q2_next)
@@ -306,8 +316,6 @@ class Agent(object):
         action_batch = torch.FloatTensor(action_batch).to(self.device)
         reward_batch = torch.FloatTensor(reward_batch).unsqueeze(1).to(self.device)
         done_batch = torch.FloatTensor(done_batch).unsqueeze(1).to(self.device)
-        current_messages_batch = [torch.tensor(np.array(msg), dtype=torch.float32).to(self.device) for msg in current_messages_batch]
-        next_messages_batch = [torch.tensor(np.array(msg), dtype=torch.float32).to(self.device) for msg in next_messages_batch]
 
 
         # === Train Critic ===
@@ -349,7 +357,7 @@ class Agent(object):
 
     
     
-    def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: List[np.ndarray], evaluate: bool = False):
+    def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: np.ndarray, evaluate: bool = False):
         """
         Select an action given own state, direction, and received messages.
 
@@ -363,37 +371,36 @@ class Agent(object):
             Tuple[np.ndarray, torch.Tensor, torch.Tensor]: action, message, raw_message_input
         """
         self.policy.eval()
+        self.embedded.eval()
 
         # === Format input ===
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
+        messages_tensor = torch.FloatTensor(messages).unsqueeze(0).to(self.device)
 
         # === Embed own state ===
         embedded_state = self.embedded(state_tensor)  # shape: [1, D]
 
-        # === Aggregate incoming messages ===
-        # messages: List[Tensor], each shape: [msg_dim]
-        # if any of the messages is None, we replace it with a zero tensor with the same shape
-        messages = [
-            torch.zeros(self.message_dim).to(self.device) if msg is None else torch.FloatTensor(msg).to(self.device)
-            for msg in messages
-        ]
-        aggregated_message = torch.cat(messages, dim=-1).unsqueeze(0).to(self.device)  # [1, N * msg_dim]
-
+        
 
         # === Choose action ===
         with torch.no_grad():
             if evaluate:
-                _, _, action = self.policy.sample(embedded_state, direction_tensor, aggregated_message)
+                _, _, action = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
             else:
-                action, _, _ = self.policy.sample(embedded_state, direction_tensor, aggregated_message)
+                action, _, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
                 
         # === Prepare message input ===
         raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
         message = self.message_encoder(raw_message_input)
 
         self.policy.train()
-        return action.detach().cpu().numpy()[0], message, raw_message_input
+        self.embedded.train()
+        action_number = action.detach().cpu().numpy()[0]  # Convert to numpy for easier handling
+        # make sure message and raw_message_input are of 1-D
+        message = message.detach().cpu().numpy()[0]
+        raw_message_input = raw_message_input.detach().cpu().numpy()[0]
+        return action_number, message, raw_message_input
 
     
     
@@ -460,17 +467,17 @@ class Agent(object):
         self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
 
         # === Load alpha/entropy if available ===
-        if checkpoint.get('automatic_entropy_tuning', False):
-            self.automatic_entropy_tuning = True
-            self.alpha = checkpoint.get('alpha', self.alpha)
-            self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
-            self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
-            self.log_alpha = self.log_alpha.to(self.device)
-            self.alpha_optim.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
+        # if checkpoint.get('automatic_entropy_tuning', False):
+        #     self.automatic_entropy_tuning = True
+        #     self.alpha = checkpoint.get('alpha', self.alpha)
+        #     self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
+        #     self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
+        #     self.log_alpha = self.log_alpha.to(self.device)
+        #     self.alpha_optim.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
 
         # === Apply device & mode ===
         for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder, self.message_decoder]:
             net.to(self.device)
-            net.eval() if evaluate else net.train()
+            net.train()
 
         print("Model loaded successfully.")

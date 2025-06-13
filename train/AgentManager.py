@@ -1,7 +1,8 @@
 from typing import Dict, List, Any, Optional, Tuple
 import os
 import numpy as np
-from Agent import Agent
+import torch
+from Agent import Agent, agent
 from dataclasses import dataclass
 
 @dataclass
@@ -13,6 +14,8 @@ class AgentConfig:
     tau: float = 1e-3
     batch_size: int = 64
     mem_size_factor: float = 1.5
+    message_dim: int = 8
+    direction_dim: int = 1
 
 class AgentManager:
     def __init__(
@@ -22,13 +25,14 @@ class AgentManager:
         agent_config: AgentConfig,
         evaluate: bool = False,
         base_dir: str = "models",
+        parallel: bool = True
     ):
         self.agent_names = agent_names
         self.algorithm_identifier = algorithm_identifier
         self.evaluate = evaluate
         self.base_dir = base_dir
-
-        self.agent: Agent = None
+        self.message_dim = agent_config.message_dim
+        self.parallel = parallel
         
         mem_size = 1 if self.evaluate else int(1e5)
         chkpt_dir = self.base_dir if self.evaluate else os.path.join(
@@ -38,7 +42,9 @@ class AgentManager:
 
         self.agent = Agent(
             input_dim=agent_config.input_dim,
-            n_actions=agent_config.n_actions,
+            action_dim=agent_config.n_actions,
+            message_dim=agent_config.message_dim,
+            direction_dim=agent_config.direction_dim,
             gamma=agent_config.gamma,
             lr=agent_config.lr,
             tau=agent_config.tau,
@@ -46,6 +52,20 @@ class AgentManager:
             max_size=int(mem_size * agent_config.mem_size_factor),
             chkpt_dir=chkpt_dir,
         )
+        
+    def eval(self):
+        """
+        Set the agent to evaluation mode.
+        This is a placeholder method, as the actual implementation may vary.
+        """
+        self.evaluate = True
+        
+    def train(self):
+        """
+        Set the agent to training mode.
+        This is a placeholder method, as the actual implementation may vary.
+        """
+        self.evaluate = False
 
     def choose_action(
         self,
@@ -53,11 +73,33 @@ class AgentManager:
         direction: np.ndarray,
         messages: List[np.ndarray]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        
         return self.agent.choose_action(state, direction, messages, self.evaluate)
+    
+    
+    def create_communication_message(self, agent: str, messages, communication: Dict[str, List[str]]) -> torch.Tensor:
+        agent_msg = [
+                        messages[communicating_agent] if communicating_agent in messages else None
+                        for communicating_agent in communication[agent]
+                    ]
+        agent_msg = [
+            np.zeros(self.message_dim) if msg is None else msg
+            for msg in agent_msg
+        ]
+        aggregated_message = np.concatenate(agent_msg)
+        return aggregated_message
+    
+    def create_communication_raw_message(self, agent: str, messages, communication: Dict[str, List[str]]) -> torch.Tensor:
+        agent_msg = [
+                        messages[communicating_agent] if communicating_agent in messages else None
+                        for communicating_agent in communication[agent]
+                    ]
+        return agent_msg
 
     def select_actions(
         self,
         direction: Dict[str, np.ndarray],
+        communication: Dict[str, List[str]],
         observations: Dict[str, np.ndarray],
         messages: Dict[str, List[np.ndarray]],
         terminated: Dict[str, bool],
@@ -69,12 +111,28 @@ class AgentManager:
                 action, message, raw_input = self.choose_action(
                     observations[agent],
                     direction[agent],
-                    messages[agent]
+                    self.create_communication_message(agent, messages, communication)
                 )
                 actions[agent] = action
                 new_messages[agent] = message
                 raw_inputs[agent] = raw_input
         return actions, new_messages, raw_inputs
+    
+    
+    def action(
+        self,
+        state: Dict[str, np.ndarray],
+        messages: Dict[str, List[np.ndarray]],
+        terminate: Dict[str, bool],
+        truncated: Dict[str, bool]
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+        if self.parallel:
+            return self.select_batch_actions(
+                state, messages, terminate, truncated
+            )
+        return self.select_actions(
+            self.direction, self.communication, state, messages, terminate, truncated
+        )
 
     def select_batch_actions(
         self,
@@ -88,23 +146,28 @@ class AgentManager:
         List[Dict[str, np.ndarray]]
     ]:
         batch_actions, batch_new_messages, batch_raw_inputs = [], [], []
-        for  dir_, obs, msg, term, trunc in zip(
-         self.direction, state, messages, terminate, truncated
+        for  dir_, com_, obs, msg, term, trunc in zip(
+         self.direction, self.communication, state, messages, terminate, truncated
         ):
-            actions, next_messages, next_raw_messages = self.select_actions(dir_, obs, msg, term, trunc)
+            actions, next_messages, next_raw_messages = self.select_actions(dir_, com_, obs, msg, term, trunc)
             batch_actions.append(actions)
             batch_new_messages.append(next_messages)
             batch_raw_inputs.append(next_raw_messages)
         return batch_actions, batch_new_messages, batch_raw_inputs
 
-    def store_transitions(
+            
+            
+            
+    def store_transition(
         self,
         observations: Dict[str, np.ndarray],
         messages: Dict[str, List[np.ndarray]],
+        direction: Dict[str, np.ndarray],
         actions: Dict[str, np.ndarray],
         rewards: Dict[str, float],
         next_observations: Dict[str, np.ndarray],
         next_messages: Dict[str, List[np.ndarray]],
+        communication: Dict[str, List[str]],
         terminated: Dict[str, bool],
         truncated: Dict[str, bool]
     ) -> None:
@@ -114,14 +177,42 @@ class AgentManager:
                 done = terminated[agent] or truncated[agent]
                 self.agent.store_transition(
                     current_state=observations[agent],
-                    current_messages=messages[agent],
-                    direction=self.direction[agent],
+                    current_messages=self.create_communication_raw_message(
+                        agent, messages, communication
+                    ),
+                    direction=direction[agent],
                     action=actions[agent],
                     reward=rewards[agent],
                     next_state=next_observations[agent],
-                    next_messages=next_messages[agent],
+                    next_messages= self.create_communication_raw_message(
+                        agent, next_messages, communication
+                    ),
                     done=done
                 )
+    def store_transitions(
+        self,
+        current_state: List[Dict[str, np.ndarray]],
+        current_messages: List[Dict[str, List[np.ndarray]]],
+        action: List[Dict[str, np.ndarray]],
+        reward: List[Dict[str, float]],
+        next_state: List[Dict[str, np.ndarray]],
+        next_messages: List[Dict[str, List[np.ndarray]]],
+        terminate: List[Dict[str, bool]],
+        truncated: List[Dict[str, bool]]
+    ) -> None:
+        for i in range(len(current_state)):
+            self.store_transition(
+                current_state[i],
+                current_messages[i],
+                self.direction[i],
+                action[i],
+                reward[i],
+                next_state[i],
+                next_messages[i],
+                self.communication[i],
+                terminate[i],
+                truncated[i]
+            )
 
     def set_communication(self, communication: Dict[str, Any]) -> None:
         """

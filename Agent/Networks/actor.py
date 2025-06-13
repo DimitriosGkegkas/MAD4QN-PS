@@ -59,11 +59,11 @@ class ActorNetwork(nn.Module):
 
         normal = Normal(mean, std)
         x_t = normal.rsample()  # Reparameterization trick
-        # print("=== Actor Output Debug ===")
-        # print(f"x_t (pre-tanh sample):\n{x_t}")
-        # print(f"std (exp(log_std)):\n{std}")
-        # print(f"mean:\n{mean}")
-        # print("==========================")
+        print("=== Actor Output Debug ===")
+        print(f"x_t (pre-tanh sample):\n{x_t}")
+        print(f"std (exp(log_std)):\n{std}")
+        print(f"mean:\n{mean}")
+        print("==========================")
 
         y_t = torch.tanh(x_t)
         action = y_t * self.action_scale + self.action_bias

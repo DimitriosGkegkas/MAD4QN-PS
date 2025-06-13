@@ -24,8 +24,7 @@ class Reward(gym.Wrapper):
 
     def reset(self, **kwargs):
         """Resets the environment."""
-        obs, info = self.env.reset(**kwargs)
-        return obs, info
+        return self.env.reset(**kwargs)
 
     def step(self, action):
         """

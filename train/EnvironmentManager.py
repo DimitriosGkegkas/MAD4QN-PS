@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 import torch
 import pathlib
 import numpy as np
@@ -13,8 +13,13 @@ class EnvironmentManager:
         agent_spec: Any,  # Define a custom type for agent_spec if possible
         scenario_subdir: str = "scenarios/sumo/multi_scenario",
         parallel: bool = True,
+        evaluate: bool = False,
+        envision: bool = False,
         num_env: int = 1,
-        seed: int = 42
+        seed: int = 42,
+        stack_frames: int = 4,
+        observation_shape: tuple = (32, 32, 3)
+        
     ):
         self.agent_count = agent_count
         self.num_env = num_env
@@ -38,21 +43,21 @@ class EnvironmentManager:
 
         if parallel:
             self.env = make_env_parallel(
-                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, True, seed, num_env=self.num_env
+                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, not envision, seed, num_env=self.num_env, stack_frames=stack_frames, observation_shape=observation_shape
             )
         else:
             self.env = make_env(
-                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, False, seed, True
+                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, headless=not envision, seed=seed, stack_frames=stack_frames, observation_shape=observation_shape
             )
 
 
-    def reset(self, scenario_ids: Optional[List[int]] | Optional[int] = None) -> Any:
+    def reset(self, scenario_ids: Optional[Union[List[int], int]] = None) -> Any:
         if scenario_ids is not None:
             self.env.set_scenario(scenario_ids)
         return self.env.reset()
 
 
-    def step(self, actions_batch: List[Dict[str, Any]] | Dict[str, Any]) -> Any:
+    def step(self, actions_batch: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Any:
         return self.env.step(actions_batch)
 
     def get_scenarios(self) -> List[str]:

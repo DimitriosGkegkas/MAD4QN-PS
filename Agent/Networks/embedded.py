@@ -62,8 +62,7 @@ class EmbeddingTail(nn.Module):
 class EmbeddedNetwork(nn.Module):
     def __init__(self, input_dim, feature_dim=100):
         super().__init__()
-        in_channels = input_dim[0]
-        self.direction_dim = input_dim[1]
+        in_channels = input_dim
 
         self.head = EmbeddingHead(in_channels=in_channels, out_channels=3)
         self.head_decoder = EmbeddingHeadDecoder(in_channels=3, out_channels=in_channels)

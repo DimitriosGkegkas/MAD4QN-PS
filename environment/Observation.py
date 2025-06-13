@@ -34,8 +34,8 @@ class Observation(gym.ObservationWrapper):
         
     def reset(self, *, seed = None, options = None):
         """Modifies the :attr:`env` after calling :meth:`reset`, returning a modified observation using :meth:`self.observation`."""
-        obs, info = self.env.reset(seed=seed, options=options)
-        return self.observation(obs), info
+        turning_intentions, communication_map, msg, raw_msg, observation, termination, truncation, reward, infos = self.env.reset(seed=seed, options=options)
+        return  turning_intentions, communication_map, msg, raw_msg, self.observation(observation), termination, truncation, reward, infos
 
     def step(self, action):
         """Modifies the :attr:`env` after calling :meth:`step` using :meth:`self.observation` on the returned observations."""

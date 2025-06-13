@@ -1,4 +1,4 @@
-from typing import List, Tuple, Any, Optional
+from typing import List, Tuple, Any, Optional, Dict
 import os
 import sys
 import numpy as np
@@ -6,16 +6,16 @@ from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 
 class BaseTrainer:
-    def __init__(self, algorithm_identifier: str,   enable_tensorboard: bool = True, evaluate: bool = False):
+    def __init__(self, algorithm_identifier: str, enable_tensorboard: bool = True, evaluate: bool = False):
         self.scores_list: List[Tuple[float, str, int]] = []
         self.scores_per_scenario_list: List[Any] = []
         self.start_time = datetime.now()
-        
-        self.run_name = f"{algorithm_identifier}_{self.start_time.strftime("%d%m%Y")}"
+
+        self.run_name = f"{algorithm_identifier}_{self.start_time.strftime('%d%m%Y')}"
         self.training_stats_path = None if evaluate else f"training_stats/{self.run_name}"
 
         self.writer: Optional[SummaryWriter] = None
-        if enable_tensorboard:
+        if self.training_stats_path is not None and enable_tensorboard:
             tensorboard_path = os.path.join(self.training_stats_path, "tensorboard")
             os.makedirs(tensorboard_path, exist_ok=True)
             self.writer = SummaryWriter(tensorboard_path)
@@ -37,23 +37,6 @@ class BaseTrainer:
         sys.stdout.write(f"\r [{progress_bar}] {percentage * 100:.2f}%")
         sys.stdout.flush()
 
-    # --- File-Based Score Saving ---
-    def save_scores(
-        self,
-        avg_rewards: List[Tuple[float, str, int]],
-        avg_per_scenario: List[Any]
-    ) -> None:
-        np.save(os.path.join(self.training_stats_path, "avg_reward.npy"), np.array(avg_rewards, dtype=object))
-        np.save(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), np.array(avg_per_scenario, dtype=object))
-
-    def load_scores(self) -> Tuple[List[Tuple[float, str, int]], List[Any]]:
-        try:
-            rewards = np.load(os.path.join(self.training_stats_path, "avg_reward.npy"), allow_pickle=True).tolist()
-            per_scenario = np.load(os.path.join(self.training_stats_path, "avg_reward_per_scenario.npy"), allow_pickle=True).tolist()
-            return rewards, per_scenario
-        except Exception:
-            return [], []
-
     # --- TensorBoard Logging ---
     def log_scalar(self, tag: str, value: float, step: int) -> None:
         if self.writer:
@@ -66,8 +49,23 @@ class BaseTrainer:
     def close_writer(self) -> None:
         if self.writer:
             self.writer.close()
-    
-    
+
+    # --- Public Training Hooks ---
+
+    def after_train_step(self, reward: float, episode: int, step: int) -> None:
+        """Called after each training step: log to console."""
+        self.log_progress(score=reward, episode=episode, ep_steps=step)
+
+    def after_episode_batch(self, episode: int, stats: Dict[str, float]) -> None:
+        """Called after a batch of episodes: log summary stats to TensorBoard."""
+        print(f"\nEpisode {episode} complete with stats: {stats}")
+        for key, value in stats.items():
+            self.log_scalar(tag=f"{key}", value=value, step=episode)
+
+    def after_evaluation(self, episode: int, scenario_rewards: List[float]) -> None:
+        """Called after evaluation: log histogram of scenario scores."""
+        print(f"\nEvaluation complete for episode {episode} with rewards: {np.mean(scenario_rewards)}")
+        self.log_histogram(tag="Evaluation/Scenario_Rewards", values=scenario_rewards, step=episode)
 
     # --- Misc Utils ---
     def slice_list(self, items: List[Any], chunk_size: int) -> List[List[Any]]:

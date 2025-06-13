@@ -229,8 +229,7 @@ class ParallelEnvWithScenario(object):
 
         # since the return is [(obs0, infos0), ...] they need to be zipped to form.
         #   [(obs0, ...), (infos0, ...)]
-        observations, infos = zip(*self._call(_Message.RESET, [None] * self._num_envs))
-        return observations, infos
+        return zip(*self._call(_Message.RESET, [None] * self._num_envs))
 
     def step(
         self, actions: Sequence[Dict[str, Any]]
@@ -323,8 +322,8 @@ def _worker(
                 result = getattr(env, payload, None)
                 pipe.send((_Message.RESULT, result))
             elif message == _Message.RESET:
-                observation, info = env.reset()
-                pipe.send((_Message.RESULT, (observation, info)))
+                res = env.reset()
+                pipe.send((_Message.RESULT, res))
             elif message == _Message.STEP:
                 observation, reward, terminated, truncated, info = env.step(payload)
                 # TODO at some point I can check if there are less than 4 cars and end the simulation (reset it) to move on if I want oto have async.

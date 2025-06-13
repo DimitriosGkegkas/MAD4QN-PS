@@ -1,28 +1,65 @@
+from math import gamma
 from typing import Any
 from datetime import datetime
 import numpy as np
+from train.BaseTrainer import BaseTrainer
 from train.AgentManager import AgentManager, AgentConfig
 from train.EnvironmentManager import EnvironmentManager
 from train.Evaluator import Evaluator
 from train.EpisodeManager import EpisodeManager
-from train.BaseTrainer import BaseTrainer
 from train.Trainer import Trainer
 from train.StatisticsCollector import StatisticsCollector
 from statistics.experiment_data_collector import ExperimentDataCollector
 from dataclasses import dataclass
+from smarts.core.agent_interface import AgentInterface
+from smarts.zoo.agent_spec import AgentSpec
+from smarts.core.controllers import ActionSpaceType
 
 @dataclass
 class TrainerConfig:
+    algorithm_identifier: str
+    
+    # Training parameters
     total_steps: int = int(1e6)
+    batch_size: int = 64
+    mem_size_factor: float = 1.5
+    num_env: int = 1 
+    stack_frames: int = 4
     agent_count: int = 4
-    algorithm_identifier: str = 'DuelingDDQNAgents'
-    scenario_subdir: str = "scenarios/sumo/multi_scenario"
     evaluation_step: int = 10
-    evaluate: bool = False
-    num_env: int = 1
-    agent_spec: Any = None  # Define a custom type for agent_spec if possible
+    max_train_steps: int = 1000  # Maximum steps per episode, can be adjusted based on the environment
+    max_evaluation_steps: int = 1000  # Maximum steps per evaluation episode, can be adjusted based on the environment
+    
+    #Agent Arch
+    message_dim: int = 8  # Dimension of the message space
+    direction_dim: int = 1  # Dimension of the direction space, can be adjusted based on the environment
+    
+    # Agent Learning
+    gamma: float = 0.99
+    lr: float = 1e-4
+    tau: float = 1e-3
     seed: int = 42
+    agent_spec: Any = AgentSpec(
+            interface=AgentInterface(
+                waypoint_paths=True,
+                action=ActionSpaceType.RawThrottle,
+                max_episode_steps=None, 
+                top_down_rgb=True
+            ),
+        )
+    
+    n_action: int = 1  # Number of actions per agent, can be adjusted based on the action space
+    observation_shape: tuple = (32, 32, 3)  # Shape of the observation space, can be adjusted based on the environment
+    
+    # Scenarios
+    scenario_subdir: str = "scenarios/sumo/multi_scenario"
+    
+    # Logging and Evaluation
+    evaluate: bool = False
     tensorboard: bool = True
+    envision: bool = False
+    parallel: bool = True  # If True, use parallel environments for training
+    
 
 class MultiAgentTrainerParallel:
     def __init__(
@@ -30,33 +67,41 @@ class MultiAgentTrainerParallel:
         config: TrainerConfig
     ):
         self.config = config
+        self.evaluate = config.evaluate
 
         self.env_manager = EnvironmentManager(
             agent_count=config.agent_count,
             agent_spec=config.agent_spec,
             scenario_subdir=config.scenario_subdir,
-            parallel=config.evaluate,
+            parallel=config.parallel,
             num_env=config.num_env,
-            seed=config.seed
+            seed=config.seed,
+            stack_frames=config.stack_frames,
+            envision=config.envision,
+            evaluate=config.evaluate,  # If True, use parallel environments for evaluation
+            observation_shape=config.observation_shape,
         )
         agent_names = self.env_manager.get_agent_names()
-        self.episode_manager = EpisodeManager(agent_names)
+        self.episode_manager = EpisodeManager(agent_names, parallel=config.parallel)
         self.logger = BaseTrainer( algorithm_identifier = config.algorithm_identifier, enable_tensorboard=config.tensorboard, evaluate=config.evaluate,)
         
         agent_config = AgentConfig(
-            input_dim=self.env_manager.env.observation_space.shape,
-            n_actions=self.env_manager.env.action_space.shape[0],
-            gamma=0.99,
-            lr=1e-4,
-            tau=1e-3,
-            batch_size=64,
-            mem_size_factor=1.5
+            input_dim= (config.stack_frames *  config.observation_shape[2], config.observation_shape[0], config.observation_shape[1]),
+            n_actions=config.n_action,
+            gamma=config.gamma,
+            lr=config.lr,
+            tau=config.tau,
+            batch_size=config.batch_size,
+            mem_size_factor= config.mem_size_factor,
+            message_dim=config.message_dim,
+            direction_dim=config.direction_dim
         )
         self.agent_manager = AgentManager(
             agent_names=agent_names,
             algorithm_identifier=config.algorithm_identifier,
             evaluate=config.evaluate,
-            agent_config=agent_config
+            agent_config=agent_config,
+            parallel=config.parallel,
         )
         
         
@@ -66,6 +111,7 @@ class MultiAgentTrainerParallel:
             episode_manager=self.episode_manager,
             env_manager=self.env_manager,
             evaluation_step=config.evaluation_step,
+            max_evaluation_steps=config.max_evaluation_steps,
             total_scenarios=len(self.env_manager.get_scenarios())
             # checkpoint_enabled=config.evaluate  # Enable checkpoints only if not evaluating
         )
@@ -74,6 +120,7 @@ class MultiAgentTrainerParallel:
             trainer_logger=self.logger,
             agent_manager=self.agent_manager,
             episode_manager=self.episode_manager,
+            evaluator=self.evaluator,
             env_manager=self.env_manager,
             config=config
         )

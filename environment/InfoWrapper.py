@@ -4,7 +4,7 @@ from turtle import distance
 import gymnasium as gym
 import numpy as np
 from sympy import E
-from utils import position2road, roads2t_i, has_conflict, has_conflict_v2v, road_2_comunication
+from utils import position2road, roads2t_i, has_conflict, has_conflict_v2v, road_2_communication
 from smarts.core.sensor import AccelerometerSensor
 
 from utils.debug import debug_save_any_img
@@ -91,7 +91,7 @@ class AgentsInformationController():
         # communication map
         self.communication_map = {}
         for agent_name in start_inverse.keys():
-            self.communication_map[agent_name] = [start[pos] for pos in road_2_comunication[start_inverse[agent_name]]]
+            self.communication_map[agent_name] = [start[pos] for pos in road_2_communication[start_inverse[agent_name]]]
             
         return self.agents
     
@@ -213,13 +213,6 @@ class AgentsInformationController():
                 turning_intentions[agent_name] = self.agents[agent_name].turning_intention
         return turning_intentions
     
-    def get_communication_map(self):
-        turning_intentions = {}
-        for agent_name in self.agent_names:
-            if agent_name in self.info:
-                turning_intentions[agent_name] = self.agents[agent_name].turning_intention
-        return turning_intentions
-    
     def set_conflicts(self):
         self.conflicts = {}
         for ego in self.agents:
@@ -262,7 +255,7 @@ class InfoWrapper(gym.Wrapper):
         message = {agent_name: None for agent_name in self.agent_names}
         
         return self.agents_information_controller.get_turning_intention(),  self.agents_information_controller.get_communication_map(), message, raw_message, observation, termination, truncation, reward, info
- # TODO this will have to return truning_ intentions, observation, termination, truncation, reward, infos
+ # TODO this will have to return turning_ intentions, communication_map, msg, raw_msg, observation, termination, truncation, reward, infos
     
     
     def _add_social_traffic_info(self, info: dict) -> dict:

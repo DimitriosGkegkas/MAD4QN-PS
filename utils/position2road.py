@@ -1,9 +1,9 @@
-roads2t_i = {'EW': 'straight', 'ES': 'left', 'EN': 'right',
-             'WE': 'straight', 'WN': 'left', 'WS': 'right',
-             'SN': 'straight', 'SW': 'left', 'SE': 'right',
-             'NS': 'straight', 'NE': 'left', 'NW': 'right'}
+roads2t_i = {'EW': [0], 'ES': [-1], 'EN': [1],
+             'WE': [0], 'WN': [-1], 'WS': [1],
+             'SN': [0], 'SW': [-1], 'SE': [1],
+             'NS': [0], 'NE': [-1], 'NW': [1]}
 
-road_2_comunication = {
+road_2_communication = {
     'E': ['S', 'W', 'N'],
     'W': ['N', 'E', 'S'],
     'S': ['W', 'N', 'E'],

@@ -11,13 +11,14 @@ from .InfoWrapper import InfoWrapper
 
 
 
-def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom = False) -> gym.Env:
+def make_env(env_name, agent_interfaces, scenario_path, headless, seed, stack_frames = 4, observation_shape=(32, 32, 3)) -> gym.Env:
     # Create environment
     env = gym.make(
         env_name,
         scenarios=scenario_path,
         agent_interfaces=agent_interfaces,
         headless=headless,  # If False, enables Envision display.
+        visdom=False,  # If True, enables Visdom display.
         seed=seed,
         scenarios_order = ScenarioOrder.sequential
     )
@@ -25,8 +26,8 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom =
 
     env = InfoWrapper(env, agent_names=agent_names)
     env = Reward(env=env, agent_names=agent_names)
-    env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
-    env = StackFrames(env, repeat=4, agent_names=agent_names)
+    env = Observation(shape=observation_shape, env=env, agent_names=agent_names)
+    env = StackFrames(env, repeat=stack_frames, agent_names=agent_names)
     env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
 
     return env
@@ -34,7 +35,7 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, visdom =
 
 
 
-def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed, num_env=10, visdom = False) -> gym.Env:
+def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed, num_env=10, stack_frames = 4,  observation_shape=(32, 32, 3)) -> gym.Env:
     # Create environment
     agent_names = agent_interfaces.keys()
     def env_constructor(sim_name, seed):
@@ -43,15 +44,15 @@ def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed,
             scenarios=scenario_path,
             agent_interfaces=agent_interfaces,
             headless=headless,  # If False, enables Envision display.
-            visdom=visdom,  # If True, enables Visdom display.
+            visdom=False,  # If True, enables Visdom display.
             seed=seed,
             scenarios_order = ScenarioOrder.sequential,
             sim_name=sim_name
         )
         env = InfoWrapper(env, agent_names=agent_names)
         env = Reward(env=env, agent_names=agent_names)
-        env = Observation(shape=(48, 48, 3), env=env, agent_names=agent_names)
-        env = StackFrames(env, repeat=4, agent_names=agent_names)
+        env = Observation(shape=observation_shape, env=env, agent_names=agent_names)
+        env = StackFrames(env, repeat=stack_frames, agent_names=agent_names)
         env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path)
         return env
     
