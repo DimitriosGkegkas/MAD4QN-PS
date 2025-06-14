@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-LOG_SIG_MAX = 1
+LOG_SIG_MAX = 0.5
 LOG_SIG_MIN = -20
 epsilon = 1e-6
 
@@ -30,6 +30,7 @@ class ActorNetwork(nn.Module):
         for i, h_dim in enumerate(hidden_dim):
             layers.append(nn.Linear(in_dim, h_dim))
             layers.append(nn.ReLU())
+            layers.append(nn.LayerNorm(h_dim))
             layers.append(nn.Dropout(p=dropout_p))
             in_dim = h_dim
 

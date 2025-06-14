@@ -11,6 +11,7 @@ class MessageEncoder(nn.Module):
         for h_dim in hidden_dim:
             layers.append(nn.Linear(in_dim, h_dim))
             layers.append(nn.ReLU())
+            layers.append(nn.LayerNorm(h_dim))
             layers.append(nn.Dropout(dropout_p))
             in_dim = h_dim
 

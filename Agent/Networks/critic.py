@@ -27,6 +27,7 @@ class CriticNetwork(nn.Module):
         for hidden_dim in hidden_dim:
             layers.append(nn.Linear(in_dim, hidden_dim))
             layers.append(nn.ReLU())
+            layers.append(nn.LayerNorm(hidden_dim))
             layers.append(nn.Dropout(p=dropout_p))
             in_dim = hidden_dim
         layers.append(nn.Linear(in_dim, output_dim))

@@ -61,12 +61,12 @@ class Agent(object):
         self.chkpt_dir = chkpt_dir
         os.makedirs(self.chkpt_dir, exist_ok=True)
         
-        # available_gpus = getAvailable(order='memory', limit=1)
-        # if available_gpus:
-        #     self.device = torch.device(f"cuda:{available_gpus[0]}")
-        # else:
-        #     self.device = torch.device("cpu")
-        self.device = torch.device("cpu")
+        available_gpus = getAvailable(order='memory', limit=1)
+        if available_gpus:
+            self.device = torch.device(f"cuda:{available_gpus[0]}")
+        else:
+            self.device = torch.device("cpu")
+        # self.device = torch.device("cpu")
             
 
         # Embedding network
@@ -120,11 +120,12 @@ class Agent(object):
 
         # === Optimizers ===
         self.critic_optim = Adam(
-            list(self.critic.parameters()) + list(self.embedded.parameters()),
+            list(self.critic.parameters()) + list(self.embedded.parameters()) +
+            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()),
             lr=lr,
             weight_decay=1e-4
         )
-        self.policy_optim = Adam(self.policy.parameters(), lr=lr)
+        self.policy_optim = Adam(self.policy.parameters(), lr=lr,  weight_decay=1e-4)
 
         # === Entropy tuning ===
         if self.automatic_entropy_tuning:
@@ -208,11 +209,14 @@ class Agent(object):
         next_message_batch: List[List[torch.Tensor]],
         done_batch: torch.Tensor
     ):
+        # Compute embedded states and target next states
         embedded_state = self.embedded(current_state_batch)
         embedded_next_state = self.embedded_target(next_state_batch)
 
+        # Encode messages
         encoded_current_messages = self.encode_messages(message_batch)
 
+        # Compute next action and Q-values for target update (no gradients)
         with torch.no_grad():
             encoded_next_messages = self.encode_messages(next_message_batch)
             next_action, _, _ = self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
@@ -220,37 +224,43 @@ class Agent(object):
             min_q_next = torch.min(q1_next, q2_next)
             target_q = reward_batch + self.gamma * (1 - done_batch) * min_q_next
 
-        # === Critic loss ===
+        # Critic loss calculation
         critic_loss, q1_loss, q2_loss = self.get_critic_loss(
             embedded_state, direction_batch, encoded_current_messages, action_batch, target_q
         )
 
-        # === Reconstruction loss ===
+        # Reconstruction loss
         recon_loss_current, encoded_current = self.get_reconstruction_loss(action_batch, embedded_state, direction_batch)
         recon_loss_next, encoded_next = self.get_reconstruction_loss(next_action, embedded_next_state, direction_batch)
         recon_loss = recon_loss_current + recon_loss_next
 
-        # === Smoothness loss ===
+        # Smoothness loss
         smoothness_loss = self.get_smoothness_loss(encoded_current, encoded_next)
 
-        # === Total loss ===
+        # Total loss
         total_loss = (
             critic_loss +
             self.reconstruction_coef * recon_loss +
             self.smoothness_coef * smoothness_loss
         )
 
-        # === Optimize ===
-        self.critic_optim.zero_grad()
-        total_loss.backward()
+        # Optimize Critic Network
+        self.critic_optim.zero_grad()  # Clear previous gradients
+        total_loss.backward()  # Compute gradients
+
+        # Clip gradients before performing the optimization step
         torch.nn.utils.clip_grad_norm_(
-            list(self.critic.parameters()) + list(self.embedded.parameters()), max_norm=10.0
+            list(self.critic.parameters()) + list(self.embedded.parameters()) +
+            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), max_norm=1.0
         )
+
+        # Perform the optimization step
         self.critic_optim.step()
 
+        # Return loss values for monitoring/tracking
         return critic_loss.item(), recon_loss.item(), smoothness_loss.item()
 
-    
+        
     def train_actor(
         self,
         state_batch: torch.Tensor,
@@ -259,26 +269,34 @@ class Agent(object):
     ):
         # === Embed current state ===
         embedded_state = self.embedded(state_batch)  # [B, D]
-
+        
         # === Aggregate messages ===
         encoded_current_messages = self.encode_messages(message_batch)
-    
 
         # === Sample action and compute policy loss ===
         action, log_pi, _ = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
         q1_pi, q2_pi = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
-        min_q_pi = torch.min(q1_pi, q2_pi)
+        min_q_pi = torch.min(q1_pi, q2_pi)  # Minimum Q-value across the Q1 and Q2 streams
+
+        # Policy loss: maximize Q-values (minimizing negative Q-values)
         policy_loss = (-min_q_pi).mean()
 
         # === Optimize policy ===
         self.policy_optim.zero_grad()
-        policy_loss.backward()
-        self.policy_optim.step()
+        policy_loss.backward()  # Compute gradients
+        
+        # Gradient clipping to avoid exploding gradients
+        torch.nn.utils.clip_grad_norm_(
+            list(self.policy.parameters()) + list(self.embedded.parameters()), max_norm=1.0
+        )
+        
+        self.policy_optim.step()  # Update the parameters based on gradients
 
         return policy_loss.item(), log_pi
 
-    
-    
+
+        
+        
     def update_entropy(self, log_pi):
         if not self.automatic_entropy_tuning:
             return torch.tensor(0.).to(self.device), torch.tensor(self.alpha)
@@ -339,22 +357,6 @@ class Agent(object):
         soft_update(self.critic_target, self.critic, self.tau)
         soft_update(self.embedded_target, self.embedded, self.tau)
             
-    def get_embedded_input(self, input_tuple):
-        
-        img, direction = input_tuple
-        img = torch.FloatTensor(img).to(self.device)
-        direction = torch.FloatTensor(direction).to(self.device)
-
-        img = torch.FloatTensor(img).to(self.device)
-        direction = torch.FloatTensor(direction).to(self.device)
-
-        if img.dim() == 3:  # single image: [C, H, W]
-            img = img.unsqueeze(0)
-        if direction.dim() == 1:  # single direction vector: [D]
-            direction = direction.unsqueeze(0)
-
-        return (img, direction)
-
     
     
     def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: np.ndarray, evaluate: bool = False):
