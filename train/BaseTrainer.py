@@ -11,12 +11,12 @@ class BaseTrainer:
         self.scores_per_scenario_list: List[Any] = []
         self.start_time = datetime.now()
 
-        self.run_name = f"{algorithm_identifier}_{self.start_time.strftime('%d%m%Y')}"
+        self.run_name = os.path.join(algorithm_identifier, self.start_time.strftime("%d%m%Y_%H%M%S"))
         self.training_stats_path = None if evaluate else f"training_stats/{self.run_name}"
 
         self.writer: Optional[SummaryWriter] = None
         if self.training_stats_path is not None and enable_tensorboard:
-            tensorboard_path = os.path.join(self.training_stats_path, "tensorboard")
+            tensorboard_path = os.path.join("training_stats", "tensorboard", self.run_name)
             os.makedirs(tensorboard_path, exist_ok=True)
             self.writer = SummaryWriter(tensorboard_path)
 
@@ -60,7 +60,7 @@ class BaseTrainer:
         """Called after a batch of episodes: log summary stats to TensorBoard."""
         print(f"\nEpisode {episode} complete with stats: {stats}")
         for key, value in stats.items():
-            self.log_scalar(tag=f"{key}", value=value, step=episode)
+            self.log_scalar(tag=f"episode/{key}", value=value, step=episode)
 
     def after_evaluation(self, episode: int, scenario_rewards: List[float]) -> None:
         """Called after evaluation: log histogram of scenario scores."""

@@ -30,7 +30,7 @@ class ActorNetwork(nn.Module):
         for i, h_dim in enumerate(hidden_dim):
             layers.append(nn.Linear(in_dim, h_dim))
             layers.append(nn.ReLU())
-            layers.append(nn.LayerNorm(h_dim))
+            layers.append(nn.LayerNorm(h_dim, bias=False))
             layers.append(nn.Dropout(p=dropout_p))
             in_dim = h_dim
 
@@ -60,11 +60,11 @@ class ActorNetwork(nn.Module):
 
         normal = Normal(mean, std)
         x_t = normal.rsample()  # Reparameterization trick
-        print("=== Actor Output Debug ===")
-        print(f"x_t (pre-tanh sample):\n{x_t}")
-        print(f"std (exp(log_std)):\n{std}")
-        print(f"mean:\n{mean}")
-        print("==========================")
+        # print("=== Actor Output Debug ===")
+        # print(f"x_t (pre-tanh sample):\n{x_t}")
+        # print(f"std (exp(log_std)):\n{std}")
+        # print(f"mean:\n{mean}")
+        # print("==========================")
 
         y_t = torch.tanh(x_t)
         action = y_t * self.action_scale + self.action_bias
@@ -74,7 +74,7 @@ class ActorNetwork(nn.Module):
         log_prob = log_prob.sum(dim=1, keepdim=True)
 
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
-        return action, log_prob, mean
+        return action, log_prob, mean, x_t
 
     def to(self, device):
         self.action_scale = self.action_scale.to(device)

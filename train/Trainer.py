@@ -14,7 +14,11 @@ class Trainer:
         episode_manager: EpisodeManager,  # ScenarioManager instance
         evaluator: Evaluator,       # Evaluator instance
         env_manager,     # EnvironmentManager instance
-        config
+        total_steps: int,
+        agent_count: int,
+        algorithm_identifier: str,
+        evaluation_step: int,
+        max_training_steps: int = 1000
     ):
         self.logger = trainer_logger
         self.agent_manager = agent_manager
@@ -22,11 +26,11 @@ class Trainer:
         self.env_manager = env_manager
         self.evaluator = evaluator
         
-        self.total_steps = config.total_steps
-        self.agent_count = config.agent_count
-        self.algorithm_identifier = config.algorithm_identifier
-        self.evaluation_step = config.evaluation_step
-        self.max_training_steps = config.max_train_steps
+        self.total_steps = total_steps
+        self.agent_count = agent_count
+        self.algorithm_identifier = algorithm_identifier
+        self.evaluation_step = evaluation_step
+        self.max_training_steps = max_training_steps
         
         self.n_steps = 0
         self.n_episodes = 0
@@ -50,7 +54,7 @@ class Trainer:
             next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
 
             self.agent_manager.store_transitions(current_state, current_raw_messages, action, reward, next_state, next_raw_messages, terminate, truncated)
-            self.agent_manager.update_agent(step=ep_steps, logger=self.logger)
+            self.agent_manager.update_agent(step=self.n_steps, logger=self.logger)
             
             current_state = next_state
             current_messages = next_messages
@@ -65,9 +69,10 @@ class Trainer:
         self.logger.after_episode_batch(
             episode=self.n_episodes,
             stats={
-                "Avg.Reward": np.mean(scores),
-                "Max.Reward": np.max(scores),
-                "Min.Reward": np.min(scores),
+                "reward/min": np.mean(scores),
+                "reward/max": np.max(scores),
+                "reward/min": np.min(scores),
+                "steps": ep_steps,
             }
         )
 

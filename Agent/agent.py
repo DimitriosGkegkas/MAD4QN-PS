@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from typing import Any, List, Optional, Tuple
 from matplotlib.style import available
@@ -11,84 +12,105 @@ import numpy as np
 from Agent.replay_memory import ReplayMemory
 from  GPUtil import getAvailable
 
-class Agent(object):
-    def __init__(
-        self,
-        input_dim: Tuple[int, int, int] = (3, 32, 32),  # e.g., (C, H, W) for image input
-        action_dim: int = 1,
-        direction_dim: int = 1,  # Direction input dimension
-        feature_dim: int = 100,
-        message_dim: int = 8,
-        n_agents: int = 4,
-        
-        tau: float = 0.005,
-        gamma: float = 0.99,
-        lr: float = 1e-4,
-        alpha: float = 0.2,
-        max_size: int = 1_000_000,
-        batch_size: int = 64,
-        reconstruction_coef: float = 0.01,
-        smoothness_coef: float = 0.01,
-        target_update_interval: int = 1,
-        automatic_entropy_tuning: bool = True,
-        env_name: Optional[str] = None,
-        chkpt_dir: str = 'tmp/dqn',
-        training_stats_path: str = 'tmp/dqn_stats'
-    ):
-        # === Store Hyperparameters ===
-        self.gamma = gamma
-        self.tau = tau
-        self.alpha = alpha
-        self.batch_size = batch_size
-        self.reconstruction_coef = reconstruction_coef
-        self.smoothness_coef = smoothness_coef
-        self.target_update_interval = target_update_interval
-        self.automatic_entropy_tuning = automatic_entropy_tuning
-        self.env_name = env_name
+from dataclasses import dataclass
+from typing import Any, Tuple, Optional
+
+@dataclass
+class AgentConfig:
+    
+    # hidden layers for networks
+    communication_hidden_dim: List[int]
+    critic_hidden_dim: List[int]
+    actor_hidden_dim: List[int]
+    
+    input_dim: Tuple[int, int, int] = (3, 32, 32)
+    action_dim: int = 1
+    direction_dim: int = 1
+    feature_dim: int = 100
+    message_dim: int = 8
+    n_agents: int = 4
+
+    tau: float = 0.005
+    gamma: float = 0.99
+    lr: float = 1e-4
+    alpha: float = 0.2
+    memory_max_size: int = 1_000_000
+    batch_size: int = 64
+
+    reconstruction_coef: float = 0.01
+    img_reconstruction_coef: float = 0.01
+    reg_coef: float = 0.1
+    smoothness_coef: float = 0.01
+
+    target_update_interval: int = 1
+    automatic_entropy_tuning: bool = True
+
+    chkpt_dir: str = 'tmp/dqn'
+    
+
+
+class Agent:
+    def __init__(self, config: AgentConfig):
+        self.input_dim = config.input_dim
+        self.action_dim = config.action_dim
+        self.direction_dim = config.direction_dim
+        self.feature_dim = config.feature_dim
+        self.message_dim = config.message_dim
+        self.n_agents = config.n_agents
+
+        self.tau = config.tau
+        self.gamma = config.gamma
+        self.lr = config.lr
+        self.alpha = config.alpha
+        self.memory_max_size = config.memory_max_size
+        self.batch_size = config.batch_size
+
+        self.reconstruction_coef = config.reconstruction_coef
+        self.img_reconstruction_coef = config.img_reconstruction_coef
+        self.reg_coef = config.reg_coef
+        self.smoothness_coef = config.smoothness_coef
+
+        self.target_update_interval = config.target_update_interval
+        self.automatic_entropy_tuning = config.automatic_entropy_tuning
+
+        self.chkpt_dir = os.path.join( config.chkpt_dir, datetime.now().strftime("%Y%m%d"))
+
         self.updates = 0
-
-        # === Store core dimensions ===
-        self.input_dim = input_dim  # e.g., (C, H, W)
-        self.action_dim = action_dim
-        self.direction_dim = direction_dim
-        self.feature_dim = feature_dim
-        self.message_dim = message_dim
-        self.n_agents = n_agents
-        self.total_message_dim = (n_agents - 1) * message_dim
+        self.total_message_dim = (self.n_agents - 1) * self.message_dim
 
 
-        # === Paths & Device ===
-        self.chkpt_dir = chkpt_dir
-        os.makedirs(self.chkpt_dir, exist_ok=True)
-        
-        available_gpus = getAvailable(order='memory', limit=1)
-        if available_gpus:
-            self.device = torch.device(f"cuda:{available_gpus[0]}")
-        else:
+        try:
+            available_gpus = getAvailable(order='memory', limit=1)
+            if available_gpus:
+                self.device = torch.device(f"cuda:{available_gpus[0]}")
+            else:
+                self.device = torch.device("cpu")
+        except Exception as e:
+            print(f"Error checking available GPUs: {e}")
+            print("Falling back to CPU.")
             self.device = torch.device("cpu")
-        # self.device = torch.device("cpu")
             
 
         # Embedding network
-        self.embedded = EmbeddedNetwork(input_dim=input_dim[0], feature_dim=feature_dim).to(self.device)
-        self.embedded_target = EmbeddedNetwork(input_dim=input_dim[0], feature_dim=feature_dim).to(self.device)
+        self.embedded = EmbeddedNetwork(input_dim=self.input_dim, feature_dim=self.feature_dim).to(self.device)
+        self.embedded_target = EmbeddedNetwork(input_dim=self.input_dim, feature_dim=self.feature_dim).to(self.device)
         hard_update(self.embedded_target, self.embedded)  # Initialize target network with same weights
         
         # Critic network
         self.critic_target = CriticNetwork(
-            feature_dim=feature_dim,
-            direction_dim=direction_dim,
+            feature_dim=self.feature_dim,
+            direction_dim=self.direction_dim,
             message_dim=self.total_message_dim,
-            action_dim=action_dim,
-            hidden_dim=[128, 128]
+            action_dim=self.action_dim,
+            hidden_dim=config.critic_hidden_dim
         ).to(self.device)
 
         self.critic = CriticNetwork(
-            feature_dim=feature_dim,
-            direction_dim=direction_dim,
+            feature_dim=self.feature_dim,
+            direction_dim=self.direction_dim,
             message_dim=self.total_message_dim,
-            action_dim=action_dim,
-            hidden_dim=[128, 128]
+            action_dim=self.action_dim,
+            hidden_dim=config.critic_hidden_dim
         ).to(self.device)
         hard_update(self.critic_target, self.critic)  # Initialize target network with same weights
 
@@ -99,22 +121,22 @@ class Agent(object):
             direction_dim=self.direction_dim,
             message_dim=self.total_message_dim,
             action_dim=self.action_dim,
-            hidden_dim=[128, 128]
+            hidden_dim=config.actor_hidden_dim
         ).to(self.device)
         
         # Total raw input: [feature || direction || action]
-        encoder_input_dim = feature_dim + direction_dim + action_dim
+        encoder_input_dim = self.feature_dim + self.direction_dim + self.action_dim
 
         self.message_encoder = MessageEncoder(
             input_dim=encoder_input_dim,
-            message_dim=message_dim,
-            hidden_dim=[64, 64]
+            message_dim=self.message_dim,
+            hidden_dim=config.communication_hidden_dim
         ).to(self.device)
 
         self.message_decoder = MessageDecoder(
-            message_dim=message_dim,
+            message_dim=self.message_dim,
             output_dim=encoder_input_dim,
-            hidden_dim=[64, 64]
+            hidden_dim=config.communication_hidden_dim[::-1]  # Reverse the hidden dimensions for decoder
         ).to(self.device)
 
 
@@ -122,19 +144,19 @@ class Agent(object):
         self.critic_optim = Adam(
             list(self.critic.parameters()) + list(self.embedded.parameters()) +
             list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()),
-            lr=lr,
+            lr=self.lr,
             weight_decay=1e-4
         )
-        self.policy_optim = Adam(self.policy.parameters(), lr=lr,  weight_decay=1e-4)
+        self.policy_optim = Adam(self.policy.parameters(), lr=self.lr,  weight_decay=1e-4)
 
         # === Entropy tuning ===
         if self.automatic_entropy_tuning:
             self.target_entropy = -torch.prod(torch.Tensor((self.action_dim,)).to(self.device)).item()
             self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
-            self.alpha_optim = Adam([self.log_alpha], lr=lr)
+            self.alpha_optim = Adam([self.log_alpha], lr=self.lr)
 
         # === Replay Buffer ===
-        self.memory = ReplayMemory(max_size)
+        self.memory = ReplayMemory(self.memory_max_size)
 
 
     def store_transition(
@@ -219,7 +241,7 @@ class Agent(object):
         # Compute next action and Q-values for target update (no gradients)
         with torch.no_grad():
             encoded_next_messages = self.encode_messages(next_message_batch)
-            next_action, _, _ = self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
+            next_action, _, _, _= self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
             q1_next, q2_next = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
             min_q_next = torch.min(q1_next, q2_next)
             target_q = reward_batch + self.gamma * (1 - done_batch) * min_q_next
@@ -236,12 +258,16 @@ class Agent(object):
 
         # Smoothness loss
         smoothness_loss = self.get_smoothness_loss(encoded_current, encoded_next)
+        
+        # image reconstruction loss
+        img_recon_loss = self.embedded.reconstruction_loss(current_state_batch)
 
         # Total loss
         total_loss = (
             critic_loss +
             self.reconstruction_coef * recon_loss +
-            self.smoothness_coef * smoothness_loss
+            self.smoothness_coef * smoothness_loss +
+            self.img_reconstruction_coef * img_recon_loss
         )
 
         # Optimize Critic Network
@@ -258,7 +284,7 @@ class Agent(object):
         self.critic_optim.step()
 
         # Return loss values for monitoring/tracking
-        return critic_loss.item(), recon_loss.item(), smoothness_loss.item()
+        return critic_loss.item(), recon_loss.item(), img_recon_loss.item(), smoothness_loss.item()
 
         
     def train_actor(
@@ -274,16 +300,24 @@ class Agent(object):
         encoded_current_messages = self.encode_messages(message_batch)
 
         # === Sample action and compute policy loss ===
-        action, log_pi, _ = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
+        action, log_pi, _, raw_mean = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
+        
+        # Compute the critic loss
         q1_pi, q2_pi = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
         min_q_pi = torch.min(q1_pi, q2_pi)  # Minimum Q-value across the Q1 and Q2 streams
 
         # Policy loss: maximize Q-values (minimizing negative Q-values)
         policy_loss = (-min_q_pi).mean()
 
+        # === Regularization loss (penalizing raw mean values) ===
+        regularization_loss = self.output_regularization_loss(raw_mean)  # Add penalty on raw_mean
+
+        # === Total loss ===
+        total_loss = policy_loss + self.reg_coef * regularization_loss
+
         # === Optimize policy ===
         self.policy_optim.zero_grad()
-        policy_loss.backward()  # Compute gradients
+        total_loss.backward()  # Compute gradients
         
         # Gradient clipping to avoid exploding gradients
         torch.nn.utils.clip_grad_norm_(
@@ -292,7 +326,15 @@ class Agent(object):
         
         self.policy_optim.step()  # Update the parameters based on gradients
 
-        return policy_loss.item(), log_pi
+        return policy_loss.item(), regularization_loss.item(), log_pi
+
+    def output_regularization_loss(self, raw_mean, max_val=1.0):
+        """
+        Penalizes values of raw_mean that go beyond a threshold (e.g., [-5, 5] range).
+        This encourages the raw_mean to remain within a reasonable range.
+        """
+        penalty = torch.mean(torch.clamp(torch.abs(raw_mean) - max_val, min=0.0) ** 2)  # L2 penalty for going out of bounds
+        return penalty
 
 
         
@@ -313,7 +355,7 @@ class Agent(object):
 
     def learn(self):
         if len(self.memory) < self.batch_size:
-            return 0, 0, 0, 0, 0
+            return None
 
         # === Sample a batch of transitions ===
         (
@@ -337,10 +379,10 @@ class Agent(object):
 
 
         # === Train Critic ===
-        critic_loss, recon_loss, smooth_loss = self.train_critic(current_state_batch, direction_batch, current_messages_batch, action_batch, reward_batch, next_state_batch, next_messages_batch, done_batch)
+        critic_loss, recon_loss, img_recon_loss, smooth_loss = self.train_critic(current_state_batch, direction_batch, current_messages_batch, action_batch, reward_batch, next_state_batch, next_messages_batch, done_batch)
 
         # === Train Actor ===
-        policy_loss, log_pi = self.train_actor(current_state_batch, direction_batch, current_messages_batch)
+        policy_loss, regularization_loss, log_pi = self.train_actor(current_state_batch, direction_batch, current_messages_batch)
 
         # === Entropy Tuning ===
         alpha_loss, alpha_tlogs = self.update_entropy(log_pi)
@@ -350,7 +392,7 @@ class Agent(object):
             self.update_networks()
         
         self.updates += 1
-        return critic_loss, recon_loss, smooth_loss, policy_loss, alpha_loss
+        return critic_loss, recon_loss, img_recon_loss, smooth_loss, policy_loss, alpha_loss, regularization_loss
 
 
     def update_networks(self):
@@ -388,9 +430,9 @@ class Agent(object):
         # === Choose action ===
         with torch.no_grad():
             if evaluate:
-                _, _, action = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
+                _, _, action, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
             else:
-                action, _, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
+                action, _, _, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
                 
         # === Prepare message input ===
         raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
@@ -402,12 +444,16 @@ class Agent(object):
         # make sure message and raw_message_input are of 1-D
         message = message.detach().cpu().numpy()[0]
         raw_message_input = raw_message_input.detach().cpu().numpy()[0]
+        
+        # self.embedded_target.visualize_head_output(state_tensor)  # Visualize the head output for debugging
         return action_number, message, raw_message_input
 
     
     
     # Save model parameters
     def save(self, filename: str = "agent_checkpoint.pth"):
+         # === Paths & Device ===
+        os.makedirs(self.chkpt_dir, exist_ok=True)
         save_path = os.path.join(self.chkpt_dir, filename)
         print(f"Saving models to {save_path}")
 

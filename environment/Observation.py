@@ -45,21 +45,13 @@ class Observation(gym.ObservationWrapper):
 
 
     def normalize_top_down_rgb(self, top_down_rgb: np.ndarray) -> np.ndarray:
-        """
-        Formats the top-down RGB observation.
-
-        Args:
-            top_down_rgb (np.ndarray): The top-down RGB observation.
-
-        Returns:
-            np.ndarray: The formatted top-down RGB observation.
-        """
-        # Resize the observation to the target shape
+        # Resize the observation to the target shape (H, W)
         resized_obs = cv2.resize(top_down_rgb, self.shape[1:], interpolation=cv2.INTER_AREA)
-        
-        # Normalize the resized observation
-        normalized_obs = np.array(resized_obs, dtype=np.uint8).reshape(self.shape) / 255.0
+
+        # Convert HWC to CHW and normalize
+        normalized_obs = np.transpose(resized_obs, (2, 0, 1)).astype(np.float32) / 255.0
         return normalized_obs
+
 
     def observation(self, obs: Dict[str, Dict[str, Any]]) -> Dict[str, np.ndarray]:
         """

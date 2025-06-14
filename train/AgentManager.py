@@ -5,53 +5,24 @@ import torch
 from Agent import Agent, agent
 from dataclasses import dataclass
 
-@dataclass
-class AgentConfig:
-    input_dim: Any
-    n_actions: int = 1
-    gamma: float = 0.99
-    lr: float = 1e-4
-    tau: float = 1e-3
-    batch_size: int = 64
-    mem_size_factor: float = 1.5
-    message_dim: int = 8
-    direction_dim: int = 1
+from energy import config
+
 
 class AgentManager:
     def __init__(
         self,
         agent_names: List[str],
-        algorithm_identifier: str,
-        agent_config: AgentConfig,
+        agent_config: agent.AgentConfig,
         evaluate: bool = False,
-        base_dir: str = "models",
         parallel: bool = True
     ):
         self.agent_names = agent_names
-        self.algorithm_identifier = algorithm_identifier
         self.evaluate = evaluate
-        self.base_dir = base_dir
         self.message_dim = agent_config.message_dim
         self.parallel = parallel
         
-        mem_size = 1 if self.evaluate else int(1e5)
-        chkpt_dir = self.base_dir if self.evaluate else os.path.join(
-            self.base_dir, self.algorithm_identifier
-        )
-        os.makedirs(chkpt_dir, exist_ok=True)
 
-        self.agent = Agent(
-            input_dim=agent_config.input_dim,
-            action_dim=agent_config.n_actions,
-            message_dim=agent_config.message_dim,
-            direction_dim=agent_config.direction_dim,
-            gamma=agent_config.gamma,
-            lr=agent_config.lr,
-            tau=agent_config.tau,
-            batch_size=agent_config.batch_size,
-            max_size=int(mem_size * agent_config.mem_size_factor),
-            chkpt_dir=chkpt_dir,
-        )
+        self.agent = Agent(agent_config)
         
     def eval(self):
         """
@@ -175,6 +146,9 @@ class AgentManager:
             # TODO check if next_observations is necessary
             if agent in observations and agent in next_observations:
                 done = terminated[agent] or truncated[agent]
+                # if done:
+                #     print("hi")
+                #     self.agent.embedded.visualize_head_output(torch.Tensor(observations[agent]).unsqueeze(0))
                 self.agent.store_transition(
                     current_state=observations[agent],
                     current_messages=self.create_communication_raw_message(
@@ -229,13 +203,17 @@ class AgentManager:
         self.direction = direction
         
     def update_agent(self, step: int, logger: Optional[Any] = None) -> None:
-        critic, recon, smooth, policy, entropy = self.agent.learn()
-        if logger:
+        losses = self.agent.learn()
+        
+        if logger and losses is not None:
+            critic, recon, img_recon, smooth, policy, entropy, regularization = losses
             logger.log_scalar("loss/critic", critic, step)
             logger.log_scalar("loss/reconstruction", recon, step)
+            logger.log_scalar("loss/image_reconstruction", img_recon, step)
             logger.log_scalar("loss/smoothness", smooth, step)
             logger.log_scalar("loss/policy", policy, step)
             logger.log_scalar("loss/entropy", entropy, step)
+            logger.log_scalar("loss/regularization", regularization, step)
 
     def save(self) -> None:
         self.agent.save()

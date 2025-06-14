@@ -2,8 +2,9 @@ from math import gamma
 from typing import Any
 from datetime import datetime
 import numpy as np
+from Agent.agent import AgentConfig
 from train.BaseTrainer import BaseTrainer
-from train.AgentManager import AgentManager, AgentConfig
+from train.AgentManager import AgentManager
 from train.EnvironmentManager import EnvironmentManager
 from train.Evaluator import Evaluator
 from train.EpisodeManager import EpisodeManager
@@ -21,23 +22,15 @@ class TrainerConfig:
     
     # Training parameters
     total_steps: int = int(1e6)
-    batch_size: int = 64
     mem_size_factor: float = 1.5
     num_env: int = 1 
     stack_frames: int = 4
-    agent_count: int = 4
     evaluation_step: int = 10
-    max_train_steps: int = 1000  # Maximum steps per episode, can be adjusted based on the environment
+    max_training_steps: int = 1000  # Maximum steps per episode, can be adjusted based on the environment
     max_evaluation_steps: int = 1000  # Maximum steps per evaluation episode, can be adjusted based on the environment
     
-    #Agent Arch
-    message_dim: int = 8  # Dimension of the message space
-    direction_dim: int = 1  # Dimension of the direction space, can be adjusted based on the environment
     
     # Agent Learning
-    gamma: float = 0.99
-    lr: float = 1e-4
-    tau: float = 1e-3
     seed: int = 42
     agent_spec: Any = AgentSpec(
             interface=AgentInterface(
@@ -47,9 +40,9 @@ class TrainerConfig:
                 top_down_rgb=True
             ),
         )
+    agent_count: int = 4
     
-    n_action: int = 1  # Number of actions per agent, can be adjusted based on the action space
-    observation_shape: tuple = (32, 32, 3)  # Shape of the observation space, can be adjusted based on the environment
+    observation_shape: tuple = (256, 256, 3)  # Shape of the observation space, can be adjusted based on the environment
     
     # Scenarios
     scenario_subdir: str = "scenarios/sumo/multi_scenario"
@@ -64,9 +57,9 @@ class TrainerConfig:
 class MultiAgentTrainerParallel:
     def __init__(
         self,
-        config: TrainerConfig
+        config: TrainerConfig,
+        agent_config: AgentConfig
     ):
-        self.config = config
         self.evaluate = config.evaluate
 
         self.env_manager = EnvironmentManager(
@@ -85,22 +78,12 @@ class MultiAgentTrainerParallel:
         self.episode_manager = EpisodeManager(agent_names, parallel=config.parallel)
         self.logger = BaseTrainer( algorithm_identifier = config.algorithm_identifier, enable_tensorboard=config.tensorboard, evaluate=config.evaluate,)
         
-        agent_config = AgentConfig(
-            input_dim= (config.stack_frames *  config.observation_shape[2], config.observation_shape[0], config.observation_shape[1]),
-            n_actions=config.n_action,
-            gamma=config.gamma,
-            lr=config.lr,
-            tau=config.tau,
-            batch_size=config.batch_size,
-            mem_size_factor= config.mem_size_factor,
-            message_dim=config.message_dim,
-            direction_dim=config.direction_dim
-        )
+        agent_config.input_dim = (config.observation_shape[2] * config.stack_frames, config.observation_shape[0], config.observation_shape[1])
+        agent_config.chkpt_dir = f"models/{config.algorithm_identifier}"
         self.agent_manager = AgentManager(
             agent_names=agent_names,
-            algorithm_identifier=config.algorithm_identifier,
-            evaluate=config.evaluate,
             agent_config=agent_config,
+            evaluate=config.evaluate,
             parallel=config.parallel,
         )
         
@@ -113,7 +96,6 @@ class MultiAgentTrainerParallel:
             evaluation_step=config.evaluation_step,
             max_evaluation_steps=config.max_evaluation_steps,
             total_scenarios=len(self.env_manager.get_scenarios())
-            # checkpoint_enabled=config.evaluate  # Enable checkpoints only if not evaluating
         )
         
         self.trainer = Trainer(
@@ -122,9 +104,12 @@ class MultiAgentTrainerParallel:
             episode_manager=self.episode_manager,
             evaluator=self.evaluator,
             env_manager=self.env_manager,
-            config=config
-        )
-        # self.stats_collector = StatisticsCollector(agent_names)        
+            total_steps = config.total_steps,
+            agent_count = config.agent_count,
+            algorithm_identifier = config.algorithm_identifier,
+            evaluation_step = config.evaluation_step,
+            max_training_steps = config.max_training_steps
+        )      
 
     def preload(self, path: str) -> None:
         self.agent_manager.load(path, evaluate=self.evaluate)
