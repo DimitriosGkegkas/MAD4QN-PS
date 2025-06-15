@@ -188,30 +188,19 @@ class Agent:
             for raw_msgs in message_batch
         ]).to(self.device)  # [B, total_msg_dim]
 
-    def get_critic_loss(
-        self,
-        embedded_state: torch.Tensor,
-        direction_batch: torch.Tensor,
-        encoded_messages: torch.Tensor,
-        action_batch: torch.Tensor,
-        target_q: torch.Tensor
-    ) -> torch.Tensor:
-        q1, q2 = self.critic(embedded_state, direction_batch, encoded_messages, action_batch)
-        q1_loss = F.mse_loss(q1, target_q)
-        q2_loss = F.mse_loss(q2, target_q)
-        return q1_loss + q2_loss, q1_loss, q2_loss
-
     def get_reconstruction_loss(
         self,
         action_batch: torch.Tensor,
-        embedded_state: torch.Tensor,
+        state: torch.Tensor,
         direction_batch: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        raw_input = torch.cat([action_batch, embedded_state, direction_batch], dim=-1)
+        with torch.no_grad():
+            embedded_state = self.embedded(state)
+            raw_input = torch.cat([action_batch, embedded_state, direction_batch], dim=-1)
         encoded = self.message_encoder(raw_input)
         decoded = self.message_decoder(encoded)
         recon_loss = F.mse_loss(decoded, raw_input)
-        return recon_loss, encoded  # Return encoded for smoothness loss
+        return recon_loss
 
     def get_smoothness_loss(
         self,
@@ -219,6 +208,47 @@ class Agent:
         encoded_next: torch.Tensor
     ) -> torch.Tensor:
         return F.mse_loss(encoded_current, encoded_next)
+    
+    
+    def get_critic_loss(
+        self,
+        current_state_batch: torch.Tensor,
+        direction_batch: torch.Tensor,
+        message_batch: List[List[torch.Tensor]],
+        action_batch: torch.Tensor,
+        reward_batch: torch.Tensor,
+        next_state_batch: torch.Tensor,
+        next_message_batch: List[List[torch.Tensor]],
+        done_batch: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        # Compute next action and Q-values for target update (no gradients)
+        with torch.no_grad():
+            # 1. Embed next state
+            embedded_next_state = self.embedded_target(next_state_batch)
+            # 2. Encode messages
+            encoded_next_messages = self.encode_messages(next_message_batch)
+            # Sample next action from the policy (should this be deterministic or stochastic?)
+            next_action, _, _, _= self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
+            # Compute target Q-values
+            q1_next, q2_next = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
+            min_q_next = torch.min(q1_next, q2_next)
+            # Compute target Q-value using Bellman equation
+            target_q = reward_batch + self.gamma * (1 - done_batch) * min_q_next
+            
+            
+        # 1. Embed current state
+        embedded_state = self.embedded(current_state_batch)
+        # 2. Encode messages
+        encoded_current_messages = self.encode_messages(message_batch)
+        # 3. Compute Q-values for current state and action
+        q1, q2 = self.critic(embedded_state, direction_batch, encoded_current_messages, action_batch)
+        # Critic loss calculation  
+        q1_loss = F.mse_loss(q1, target_q)
+        q2_loss = F.mse_loss(q2, target_q)
+        critic_loss = q1_loss + q2_loss
+        
+        return critic_loss
+        
 
     def train_critic(
         self,
@@ -231,33 +261,21 @@ class Agent:
         next_message_batch: List[List[torch.Tensor]],
         done_batch: torch.Tensor
     ):
-        # Compute embedded states and target next states
-        embedded_state = self.embedded(current_state_batch)
-        embedded_next_state = self.embedded_target(next_state_batch)
 
-        # Encode messages
-        encoded_current_messages = self.encode_messages(message_batch)
-
-        # Compute next action and Q-values for target update (no gradients)
-        with torch.no_grad():
-            encoded_next_messages = self.encode_messages(next_message_batch)
-            next_action, _, _, _= self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
-            q1_next, q2_next = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
-            min_q_next = torch.min(q1_next, q2_next)
-            target_q = reward_batch + self.gamma * (1 - done_batch) * min_q_next
-
-        # Critic loss calculation
-        critic_loss, q1_loss, q2_loss = self.get_critic_loss(
-            embedded_state, direction_batch, encoded_current_messages, action_batch, target_q
+        # Critic loss
+        critic_loss = self.get_critic_loss(
+            current_state_batch,
+            direction_batch,
+            message_batch,
+            action_batch,
+            reward_batch,
+            next_state_batch,
+            next_message_batch,
+            done_batch
         )
 
         # Reconstruction loss
-        recon_loss_current, encoded_current = self.get_reconstruction_loss(action_batch, embedded_state, direction_batch)
-        recon_loss_next, encoded_next = self.get_reconstruction_loss(next_action, embedded_next_state, direction_batch)
-        recon_loss = recon_loss_current + recon_loss_next
-
-        # Smoothness loss
-        smoothness_loss = self.get_smoothness_loss(encoded_current, encoded_next)
+        recon_loss = self.get_reconstruction_loss(action_batch, current_state_batch, direction_batch)
         
         # image reconstruction loss
         img_recon_loss = self.embedded.reconstruction_loss(current_state_batch)
@@ -266,7 +284,6 @@ class Agent:
         total_loss = (
             critic_loss +
             self.reconstruction_coef * recon_loss +
-            self.smoothness_coef * smoothness_loss +
             self.img_reconstruction_coef * img_recon_loss
         )
 
@@ -284,8 +301,39 @@ class Agent:
         self.critic_optim.step()
 
         # Return loss values for monitoring/tracking
-        return critic_loss.item(), recon_loss.item(), img_recon_loss.item(), smoothness_loss.item()
+        return critic_loss.item(), recon_loss.item(), img_recon_loss.item()
+    
+    
+    def get_policy_loss(
+        self,
+        state_batch: torch.Tensor,
+        direction_batch: torch.Tensor,
+        message_batch: List[List[torch.Tensor]]
+    ):
+        
+        with torch.no_grad():
+            # === Embed current state ===
+            embedded_state = self.embedded(state_batch)  # [B, D]
+            
+            # === Aggregate messages ===
+            encoded_current_messages = self.encode_messages(message_batch)
 
+        # === Sample action and compute policy loss ===
+        action, log_pi, _, raw_mean = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
+        
+        # Compute the policy loss using the critic's Q-values
+        q1_pi, q2_pi = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
+        min_q_pi = torch.min(q1_pi, q2_pi)  # Minimum Q-value across the Q1 and Q2 streams
+
+        # Policy loss: maximize Q-values (minimizing negative Q-values)
+        policy_loss = (-min_q_pi).mean()
+        
+        # === Regularization loss (penalizing raw mean values) ===
+        regularization_loss = torch.mean(torch.clamp(torch.abs(raw_mean) - 1.0, min=0.0) ** 2)
+        
+        return policy_loss, regularization_loss, log_pi
+        
+        
         
     def train_actor(
         self,
@@ -293,24 +341,9 @@ class Agent:
         direction_batch: torch.Tensor,
         message_batch: List[List[torch.Tensor]]
     ):
-        # === Embed current state ===
-        embedded_state = self.embedded(state_batch)  # [B, D]
-        
-        # === Aggregate messages ===
-        encoded_current_messages = self.encode_messages(message_batch)
-
-        # === Sample action and compute policy loss ===
-        action, log_pi, _, raw_mean = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
-        
-        # Compute the critic loss
-        q1_pi, q2_pi = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
-        min_q_pi = torch.min(q1_pi, q2_pi)  # Minimum Q-value across the Q1 and Q2 streams
-
-        # Policy loss: maximize Q-values (minimizing negative Q-values)
-        policy_loss = (-min_q_pi).mean()
-
-        # === Regularization loss (penalizing raw mean values) ===
-        regularization_loss = self.output_regularization_loss(raw_mean)  # Add penalty on raw_mean
+        policy_loss, regularization_loss, log_pi = self.get_policy_loss(
+            state_batch, direction_batch, message_batch
+        )
 
         # === Total loss ===
         total_loss = policy_loss + self.reg_coef * regularization_loss
@@ -320,22 +353,11 @@ class Agent:
         total_loss.backward()  # Compute gradients
         
         # Gradient clipping to avoid exploding gradients
-        torch.nn.utils.clip_grad_norm_(
-            list(self.policy.parameters()) + list(self.embedded.parameters()), max_norm=1.0
-        )
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
         
         self.policy_optim.step()  # Update the parameters based on gradients
 
         return policy_loss.item(), regularization_loss.item(), log_pi
-
-    def output_regularization_loss(self, raw_mean, max_val=1.0):
-        """
-        Penalizes values of raw_mean that go beyond a threshold (e.g., [-5, 5] range).
-        This encourages the raw_mean to remain within a reasonable range.
-        """
-        penalty = torch.mean(torch.clamp(torch.abs(raw_mean) - max_val, min=0.0) ** 2)  # L2 penalty for going out of bounds
-        return penalty
-
 
         
         
@@ -379,20 +401,21 @@ class Agent:
 
 
         # === Train Critic ===
-        critic_loss, recon_loss, img_recon_loss, smooth_loss = self.train_critic(current_state_batch, direction_batch, current_messages_batch, action_batch, reward_batch, next_state_batch, next_messages_batch, done_batch)
+        critic_loss, recon_loss, img_recon_loss = self.train_critic(current_state_batch, direction_batch, current_messages_batch, action_batch, reward_batch, next_state_batch, next_messages_batch, done_batch)
 
         # === Train Actor ===
         policy_loss, regularization_loss, log_pi = self.train_actor(current_state_batch, direction_batch, current_messages_batch)
 
-        # === Entropy Tuning ===
-        alpha_loss, alpha_tlogs = self.update_entropy(log_pi)
+        # # === Entropy Tuning ===
+        # alpha_loss, alpha_tlogs = self.update_entropy(log_pi)
+        alpha_loss = 0
 
         # === Update Target Network ===
         if self.updates % self.target_update_interval == 0:
             self.update_networks()
         
         self.updates += 1
-        return critic_loss, recon_loss, img_recon_loss, smooth_loss, policy_loss, alpha_loss, regularization_loss
+        return critic_loss, recon_loss, img_recon_loss, policy_loss, alpha_loss, regularization_loss
 
 
     def update_networks(self):
@@ -422,28 +445,29 @@ class Agent:
         direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
         messages_tensor = torch.FloatTensor(messages).unsqueeze(0).to(self.device)
 
-        # === Embed own state ===
-        embedded_state = self.embedded(state_tensor)  # shape: [1, D]
 
         
 
         # === Choose action ===
         with torch.no_grad():
+            # === Embed own state ===
+            embedded_state = self.embedded(state_tensor)  # shape: [1, D]
             if evaluate:
                 _, _, action, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
             else:
                 action, _, _, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
                 
-        # === Prepare message input ===
-        raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
-        message = self.message_encoder(raw_message_input)
+            # === Prepare message input ===
+            raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
+            message = self.message_encoder(raw_message_input)
 
+            action_number = action.detach().cpu().numpy()[0]  # Convert to numpy for easier handling
+            # make sure message and raw_message_input are of 1-D
+            message = message.detach().cpu().numpy()[0]
+            raw_message_input = raw_message_input.detach().cpu().numpy()[0]
+        
         self.policy.train()
         self.embedded.train()
-        action_number = action.detach().cpu().numpy()[0]  # Convert to numpy for easier handling
-        # make sure message and raw_message_input are of 1-D
-        message = message.detach().cpu().numpy()[0]
-        raw_message_input = raw_message_input.detach().cpu().numpy()[0]
         
         # self.embedded_target.visualize_head_output(state_tensor)  # Visualize the head output for debugging
         return action_number, message, raw_message_input
