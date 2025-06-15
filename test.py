@@ -11,6 +11,7 @@ if __name__ == '__main__':
         max_evaluation_steps=100,
         
         scenario_subdir = "scenarios/sumo/multi_scenario_part",
+        observation_shape=(128, 128, 3),  # Shape of the observation space, can be adjusted based on the environment
         
         # parallel=False,
         # envision=True,
