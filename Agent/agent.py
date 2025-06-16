@@ -1,13 +1,16 @@
 from datetime import datetime
 import os
+from turtle import forward
 from typing import Any, List, Optional, Tuple
 from matplotlib.style import available
+from py import log
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import torch.nn.functional as F
 from torch.optim import Adam
 from Agent.utils import soft_update, hard_update
+from train.BaseTrainer import BaseTrainer
 from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder, MessageDecoder
 import numpy as np
 import re
@@ -36,7 +39,7 @@ class AgentConfig:
     tau: float = 0.005
     gamma: float = 0.99
     lr: float = 1e-4
-    alpha: float = 0.2
+    alpha: float = 0.1
     memory_max_size: int = 1_000_000
     batch_size: int = 64
 
@@ -45,8 +48,10 @@ class AgentConfig:
     reg_coef: float = 0.1
     smoothness_coef: float = 0.01
 
-    target_update_interval: int = 1
+    target_update_interval: int = 2
+    actor_update_frequency: int = 1
     automatic_entropy_tuning: bool = True
+    entropy_decay_rate: float = 0.0001
 
     chkpt_dir: str = 'tmp/dqn'
     
@@ -64,7 +69,7 @@ class Agent:
         self.tau = config.tau
         self.gamma = config.gamma
         self.lr = config.lr
-        self.alpha = config.alpha
+        self.init_alpha = config.alpha
         self.memory_max_size = config.memory_max_size
         self.batch_size = config.batch_size
 
@@ -74,7 +79,10 @@ class Agent:
         self.smoothness_coef = config.smoothness_coef
 
         self.target_update_interval = config.target_update_interval
+        self.actor_update_frequency = config.actor_update_frequency
         self.automatic_entropy_tuning = config.automatic_entropy_tuning
+        self.entropy_decay_rate = config.entropy_decay_rate
+    
 
         self.chkpt_dir = os.path.join( config.chkpt_dir, datetime.now().strftime("%Y%m%d"))
 
@@ -154,14 +162,24 @@ class Agent:
 
         # === Entropy tuning ===
         if self.automatic_entropy_tuning:
-            self.target_entropy = -torch.prod(torch.Tensor((self.action_dim,)).to(self.device)).item()
-            self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
-            self.alpha_optim = Adam([self.log_alpha], lr=self.lr)
+            self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
+            self.log_alpha.requires_grad = True
+            # set target entropy to -|A|
+            self.target_entropy = -self.action_dim
+            self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
+                                                    lr=self.lr,)
+            self.min_entropy = -0.1*self.action_dim  # Minimum entropy for the target entropy
+            
+            
 
+            
         # === Replay Buffer ===
         self.memory = ReplayMemory(self.memory_max_size)
 
-
+    @property
+    def alpha(self):
+        return self.log_alpha.exp()
+    
     def store_transition(
         self,
         current_state: np.ndarray,
@@ -225,18 +243,27 @@ class Agent:
         done_batch: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Compute next action and Q-values for target update (no gradients)
+        self.critic_target.eval()
+        self.embedded_target.eval()
+        self.policy.eval()
+        self.critic.eval()
+        self.embedded.eval()
+        
         with torch.no_grad():
             # 1. Embed next state
             embedded_next_state = self.embedded_target(next_state_batch)
             # 2. Encode messages
             encoded_next_messages = self.encode_messages(next_message_batch)
             # Sample next action from the policy (should this be deterministic or stochastic?)
-            next_action, _, _, _= self.policy.sample(embedded_next_state, direction_batch, encoded_next_messages)
+            dist, mu = self.policy.forward(embedded_next_state, direction_batch, encoded_next_messages)
+            next_action = dist.rsample()
+            log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
             # Compute target Q-values
-            q1_next, q2_next = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
-            min_q_next = torch.min(q1_next, q2_next)
-            # Compute target Q-value using Bellman equation
-            target_q = reward_batch + self.gamma * (1 - done_batch) * min_q_next
+            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
+            target_V = torch.min(target_Q1,
+                                target_Q2) - self.alpha.detach() * log_prob
+            target_q = reward_batch + ((1 - done_batch) * self.gamma * target_V)
+            target_q = target_q.detach()
             
             
         # 1. Embed current state
@@ -262,7 +289,8 @@ class Agent:
         reward_batch: torch.Tensor,
         next_state_batch: torch.Tensor,
         next_message_batch: List[List[torch.Tensor]],
-        done_batch: torch.Tensor
+        done_batch: torch.Tensor,
+        logger: Optional[Any] = None
     ):
 
         # Critic loss
@@ -280,105 +308,88 @@ class Agent:
         # Reconstruction loss
         recon_loss = self.get_reconstruction_loss(action_batch, current_state_batch, direction_batch)
         
-        # image reconstruction loss
-        img_recon_loss = self.embedded.reconstruction_loss(current_state_batch)
 
         # Total loss
         total_loss = (
             critic_loss +
-            self.reconstruction_coef * recon_loss +
-            self.img_reconstruction_coef * img_recon_loss
+            self.reconstruction_coef * recon_loss
         )
 
         # Optimize Critic Network
         self.critic_optim.zero_grad()  # Clear previous gradients
         total_loss.backward()  # Compute gradients
+        self.critic_optim.step() # Update the parameters based on gradients
 
-        # Clip gradients before performing the optimization step
-        torch.nn.utils.clip_grad_norm_(
-            list(self.critic.parameters()) + list(self.embedded.parameters()) +
-            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), max_norm=1.0
-        )
-
-        # Perform the optimization step
-        self.critic_optim.step()
-
-        # Return loss values for monitoring/tracking
-        return critic_loss.item(), recon_loss.item(), img_recon_loss.item()
+        if logger is None:
+            return
+        
+        logger.log_scalar("loss/critic", critic_loss.item(), self.updates)
+        logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
     
     
-    def get_policy_loss(
-        self,
-        state_batch: torch.Tensor,
-        direction_batch: torch.Tensor,
-        message_batch: List[List[torch.Tensor]]
-    ):
-        
-        with torch.no_grad():
-            # === Embed current state ===
-            embedded_state = self.embedded(state_batch)  # [B, D]
-            
-            # === Aggregate messages ===
-            encoded_current_messages = self.encode_messages(message_batch)
 
-        # === Sample action and compute policy loss ===
-        action, log_pi, _, raw_mean = self.policy.sample(embedded_state, direction_batch, encoded_current_messages)
-        
-        # Compute the policy loss using the critic's Q-values
-        q1_pi, q2_pi = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
-        min_q_pi = torch.min(q1_pi, q2_pi)  # Minimum Q-value across the Q1 and Q2 streams
-
-        # Policy loss: maximize Q-values (minimizing negative Q-values)
-        policy_loss = (-min_q_pi).mean()
-        
-        # === Regularization loss (penalizing raw mean values) ===
-        regularization_loss = torch.mean(torch.clamp(torch.abs(raw_mean) - 1.0, min=0.0) ** 2)
-        
-        return policy_loss, regularization_loss, log_pi
-        
         
         
     def train_actor(
         self,
         state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
-        message_batch: List[List[torch.Tensor]]
-    ):
-        policy_loss, regularization_loss, log_pi = self.get_policy_loss(
-            state_batch, direction_batch, message_batch
-        )
+        message_batch: List[List[torch.Tensor]],
+        logger: Optional[BaseTrainer] = None
+    ):    
+        with torch.no_grad():
+            # === Embed current state ===
+            embedded_state = self.embedded(state_batch).detach()  # [B, feature_dim]
+            
+            # === Aggregate messages ===
+            encoded_current_messages = self.encode_messages(message_batch).detach()  # [B, total_msg_dim]
+
+        # === Sample action and compute policy loss ===
+        dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
+        
+        action = dist.rsample()
+        log_prob = dist.log_prob(action).sum(-1, keepdim=True)
+        # Compute the policy loss using the critic's Q-values
+        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
+        actor_Q = torch.min(actor_Q1, actor_Q2)
+        actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
 
         # === Total loss ===
-        total_loss = policy_loss + self.reg_coef * regularization_loss
+        total_loss = actor_loss
+        # total_loss += self.reg_coef * regularization_loss  # Add regularization loss
 
         # === Optimize policy ===
         self.policy_optim.zero_grad()
         total_loss.backward()  # Compute gradients
-        
-        # Gradient clipping to avoid exploding gradients
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
-        
         self.policy_optim.step()  # Update the parameters based on gradients
+        
+        if self.automatic_entropy_tuning:
+            self.log_alpha_optimizer.zero_grad()
+            alpha_loss = (self.alpha *
+                          (-log_prob - self.target_entropy).detach()).mean()
+            alpha_loss.backward()
+            self.log_alpha_optimizer.step()
+            if logger is not None:
+                logger.log_scalar("loss/alpha", alpha_loss.item(), self.updates)
+                logger.log_scalar("alpha", self.alpha, self.updates)
+                logger.log_scalar("target_entropy", self.target_entropy, self.updates)
+            self.update_target_entropy()
+        
+        if logger is None:
+            return
 
-        return policy_loss.item(), regularization_loss.item(), log_pi
 
+        logger.log_scalar("policy/action_mean", action.mean(), self.updates)
+        logger.log_scalar("policy/action_std", action.std(), self.updates)
+        logger.log_scalar("policy/action_min", action.min(), self.updates)
+        logger.log_scalar("policy/action_max", action.max(), self.updates)
+        logger.log_scalar("loss/actor", actor_loss.item(), self.updates)
+        regularization_loss = torch.mean(torch.clamp(torch.abs(mu) - 1.0, min=0.0) ** 2)
+        logger.log_scalar("policy/regularization", regularization_loss.item(), self.updates)
         
         
-    def update_entropy(self, log_pi):
-        if not self.automatic_entropy_tuning:
-            return torch.tensor(0.).to(self.device), torch.tensor(self.alpha)
 
-        alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()
-
-        self.alpha_optim.zero_grad()
-        alpha_loss.backward()
-        self.alpha_optim.step()
-
-        self.alpha = self.log_alpha.exp()
-        return alpha_loss.item(), self.alpha.clone().item()
-
-
-    def learn(self):
+    def learn(self, logger):
         if len(self.memory) < self.batch_size:
             return None
 
@@ -404,21 +415,35 @@ class Agent:
 
 
         # === Train Critic ===
-        critic_loss, recon_loss, img_recon_loss = self.train_critic(current_state_batch, direction_batch, current_messages_batch, action_batch, reward_batch, next_state_batch, next_messages_batch, done_batch)
+        self.train_critic(
+            current_state_batch, 
+            direction_batch, 
+            current_messages_batch, 
+            action_batch, 
+            reward_batch, 
+            next_state_batch, 
+            next_messages_batch, 
+            done_batch,
+            logger=logger
+            )
 
         # === Train Actor ===
-        policy_loss, regularization_loss, log_pi = self.train_actor(current_state_batch, direction_batch, current_messages_batch)
-
-        # # === Entropy Tuning ===
-        # alpha_loss, alpha_tlogs = self.update_entropy(log_pi)
-        alpha_loss = 0
+        if self.updates % self.actor_update_frequency == 0:
+            self.train_actor(current_state_batch, direction_batch, current_messages_batch, logger)
 
         # === Update Target Network ===
         if self.updates % self.target_update_interval == 0:
             self.update_networks()
-        
+            
         self.updates += 1
-        return critic_loss, recon_loss, img_recon_loss, policy_loss, alpha_loss, regularization_loss
+
+    def update_target_entropy(self):
+        """Decay the target entropy over time."""
+        if not self.automatic_entropy_tuning:
+            return
+        
+        # At each training step
+        self.target_entropy = max(self.min_entropy, self.target_entropy - self.entropy_decay_rate)
 
 
     def update_networks(self):
@@ -455,11 +480,9 @@ class Agent:
         with torch.no_grad():
             # === Embed own state ===
             embedded_state = self.embedded(state_tensor)  # shape: [1, D]
-            if evaluate:
-                _, _, action, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
-            else:
-                action, _, _, _ = self.policy.sample(embedded_state, direction_tensor, messages_tensor)
-                
+            dist, mu = self.policy.forward(embedded_state, direction_tensor, messages_tensor)
+            action = dist.sample() if not evaluate else dist.mean
+            action = action.clamp(-1 , 1)
             # === Prepare message input ===
             raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
             message = self.message_encoder(raw_message_input)
@@ -495,7 +518,6 @@ class Agent:
             q1, q2 = self.critic(embedded_state, direction_tensor, messages_tensor, action)
             q1 = q1.squeeze().cpu().numpy()
             q2 = q2.squeeze().cpu().numpy()
-            reconstructed_image = self.embedded.head(state_tensor).squeeze().cpu().numpy()
 
         embedded_np = embedded_state.squeeze().cpu().numpy()
         flat_msg = messages.flatten()
@@ -523,18 +545,6 @@ class Agent:
             ax.imshow(rgb_img)
             ax.set_title(f"State Image {i}", fontsize=10)
             ax.axis('off')
-        # ---- Reconstructed Image (Below State) ----
-        ax = fig.add_subplot(gs[1, 2])
-
-        # Assume reconstructed_image is (3, H, W) for RGB
-        if reconstructed_image.ndim == 3 and reconstructed_image.shape[0] == 3:
-            rgb_img = np.transpose(reconstructed_image, (1, 2, 0))  # (3, H, W) -> (H, W, 3)
-            ax.imshow(np.clip(rgb_img, 0, 1))  # Optional: ensure values are in displayable range
-        else:
-            ax.imshow(reconstructed_image)  # Fallback in case shape is already (H, W, 3)
-
-        ax.set_title("Reconstructed Image", fontsize=12)
-        ax.axis('off')
         # ---- Action & Direction (Center Text Block) ----
         ax = fig.add_subplot(gs[2, :])
         action_text = f"Action Taken: {action}"

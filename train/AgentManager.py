@@ -205,16 +205,7 @@ class AgentManager:
         self.direction = direction
         
     def update_agent(self, step: int, logger: Optional[Any] = None) -> None:
-        losses = self.agent.learn()
-        
-        if logger and losses is not None:
-            critic, recon, img_recon, policy, entropy, regularization = losses
-            logger.log_scalar("loss/critic", critic, step)
-            logger.log_scalar("loss/reconstruction", recon, step)
-            logger.log_scalar("loss/image_reconstruction", img_recon, step)
-            logger.log_scalar("loss/policy", policy, step)
-            logger.log_scalar("loss/entropy", entropy, step)
-            logger.log_scalar("loss/regularization", regularization, step)
+        self.agent.learn(logger)
 
     def save(self) -> None:
         self.agent.save()

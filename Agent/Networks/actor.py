@@ -1,16 +1,67 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-LOG_SIG_MAX = 0.5
-LOG_SIG_MIN = -20
-epsilon = 1e-6
+import numpy as np
+import torch
+import math
+from torch import nn
+from torch import distributions as pyd
 
-def weights_init_(m):
-    if isinstance(m, nn.Linear):
-        nn.init.kaiming_uniform_(m.weight, a=0.01)
-        nn.init.constant_(m.bias, 0)
+import utils
+
+
+class TanhTransform(pyd.transforms.Transform):
+    domain = pyd.constraints.real
+    codomain = pyd.constraints.interval(-1.0, 1.0)
+    bijective = True
+    sign = +1
+
+    def __init__(self, cache_size=1):
+        super().__init__(cache_size=cache_size)
+
+    @staticmethod
+    def atanh(x):
+        return 0.5 * (x.log1p() - (-x).log1p())
+
+    def __eq__(self, other):
+        return isinstance(other, TanhTransform)
+
+    def _call(self, x):
+        return x.tanh()
+
+    def _inverse(self, y):
+        # We do not clamp to the boundary here as it may degrade the performance of certain algorithms.
+        # one should use `cache_size=1` instead
+        return self.atanh(y)
+
+    def log_abs_det_jacobian(self, x, y):
+        # We use a formula that is more numerically stable, see details in the following link
+        # https://github.com/tensorflow/probability/commit/ef6bb176e0ebd1cf6e25c6b5cecdd2428c22963f#diff-e120f70e92e6741bca649f04fcd907b7
+        return 2. * (math.log(2.) - x - F.softplus(-2. * x))
+
+
+class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
+    def __init__(self, loc, scale):
+        self.loc = loc
+        self.scale = scale
+
+        self.base_dist = pyd.Normal(loc, scale)
+        transforms = [TanhTransform()]
+        super().__init__(self.base_dist, transforms)
+
+    @property
+    def mean(self):
+        mu = self.loc
+        for tr in self.transforms:
+            mu = tr(mu)
+        return mu
+
+
+
+LOG_SIG_MAX = 2
+LOG_SIG_MIN = -5
+epsilon = 1e-6
 
 class ActorNetwork(nn.Module):
     def __init__(
@@ -29,9 +80,8 @@ class ActorNetwork(nn.Module):
 
         for i, h_dim in enumerate(hidden_dim):
             layers.append(nn.Linear(in_dim, h_dim))
-            layers.append(nn.ReLU())
-            layers.append(nn.LayerNorm(h_dim, bias=False))
-            layers.append(nn.Dropout(p=dropout_p))
+            layers.append(nn.ReLU(inplace=True))
+            # layers.append(nn.Dropout(p=dropout_p))
             in_dim = h_dim
 
         self.net = nn.Sequential(*layers)
@@ -39,44 +89,19 @@ class ActorNetwork(nn.Module):
         self.mean_linear = nn.Linear(in_dim, action_dim)
         self.log_std_linear = nn.Linear(in_dim, action_dim)
 
-        self.register_buffer("action_scale", torch.tensor(1.0))
-        self.register_buffer("action_bias", torch.tensor(0.0))
-
-        self.apply(weights_init_)
-        weights_init_(self.mean_linear)
-        weights_init_(self.log_std_linear)
+        self.apply(utils.weight_init)
 
     def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: torch.Tensor):
         x = torch.cat([embedded, direction, messages], dim=-1)
         x = self.net(x)  # apply hidden layers
-        mean = self.mean_linear(x)
+        mu = self.mean_linear(x)
         log_std = self.log_std_linear(x)
-        log_std = torch.clamp(log_std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
-        return mean, log_std
-
-    def sample(self, embedded: torch.Tensor, direction: torch.Tensor, messages: torch.Tensor):
-        mean, log_std = self.forward(embedded, direction, messages)
+        
+        log_std = torch.tanh(log_std)
+        log_std = LOG_SIG_MIN + 0.5 * (LOG_SIG_MAX - LOG_SIG_MIN) * (log_std + 1)
+        
         std = log_std.exp()
+        dist = SquashedNormal(mu, std)
+        return dist, mu
+    
 
-        normal = Normal(mean, std)
-        x_t = normal.rsample()  # Reparameterization trick
-        # print("=== Actor Output Debug ===")
-        # print(f"x_t (pre-tanh sample):\n{x_t}")
-        # print(f"std (exp(log_std)):\n{std}")
-        # print(f"mean:\n{mean}")
-        # print("==========================")
-
-        y_t = torch.tanh(x_t)
-        action = y_t * self.action_scale + self.action_bias
-
-        log_prob = normal.log_prob(x_t)
-        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
-        log_prob = log_prob.sum(dim=1, keepdim=True)
-
-        mean = torch.tanh(mean) * self.action_scale + self.action_bias
-        return action, log_prob, mean, x_t
-
-    def to(self, device):
-        self.action_scale = self.action_scale.to(device)
-        self.action_bias = self.action_bias.to(device)
-        return super().to(device)
