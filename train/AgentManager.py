@@ -42,10 +42,11 @@ class AgentManager:
         self,
         state: np.ndarray,
         direction: np.ndarray,
-        messages: List[np.ndarray]
+        messages: List[np.ndarray],
+        agent: str = None
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         
-        return self.agent.choose_action(state, direction, messages, self.evaluate)
+        return self.agent.choose_action(state, direction, messages, agent, self.evaluate)
     
     
     def create_communication_message(self, agent: str, messages, communication: Dict[str, List[str]]) -> torch.Tensor:
@@ -82,7 +83,8 @@ class AgentManager:
                 action, message, raw_input = self.choose_action(
                     observations[agent],
                     direction[agent],
-                    self.create_communication_message(agent, messages, communication)
+                    self.create_communication_message(agent, messages, communication),
+                    agent=agent
                 )
                 actions[agent] = action
                 new_messages[agent] = message

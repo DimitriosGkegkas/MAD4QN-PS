@@ -13,9 +13,9 @@ if __name__ == '__main__':
         scenario_subdir = "scenarios/sumo/multi_scenario_part",
         observation_shape=(128, 128, 3),  # Shape of the observation space, can be adjusted based on the environment
         
-        # parallel=False,
-        # envision=True,
-        # evaluate=True
+        parallel=False,
+        envision=True,
+        evaluate=True
     )
     agent_config = AgentConfig(
         feature_dim=12,
@@ -34,9 +34,9 @@ if __name__ == '__main__':
     )
 
     trainer = MultiAgentTrainerParallel(config, agent_config)
-    # trainer.preload("models/test/20250614/agent_checkpoint.pth")
+    trainer.preload("models/agent_checkpoint.pth")
     
 
-    trainer.train()
-    # trainer.envision(0)
+    # trainer.train()
+    trainer.envision(1)
     

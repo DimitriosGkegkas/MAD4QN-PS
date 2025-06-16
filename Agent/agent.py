@@ -3,11 +3,14 @@ import os
 from typing import Any, List, Optional, Tuple
 from matplotlib.style import available
 import torch
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import torch.nn.functional as F
 from torch.optim import Adam
 from Agent.utils import soft_update, hard_update
 from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder, MessageDecoder
 import numpy as np
+import re
 
 from Agent.replay_memory import ReplayMemory
 from  GPUtil import getAvailable
@@ -424,7 +427,7 @@ class Agent:
             
     
     
-    def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: np.ndarray, evaluate: bool = False):
+    def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: np.ndarray, agent: str = None, evaluate: bool = False):
         """
         Select an action given own state, direction, and received messages.
 
@@ -460,6 +463,10 @@ class Agent:
             # === Prepare message input ===
             raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
             message = self.message_encoder(raw_message_input)
+            
+            # if(agent == "Agent-0"):
+            #     # Debugging visualization
+            #     self.debug_step(state, direction, messages, action, message, embedded_state, agent, save_path="debug_step_1")
 
             action_number = action.detach().cpu().numpy()[0]  # Convert to numpy for easier handling
             # make sure message and raw_message_input are of 1-D
@@ -472,8 +479,121 @@ class Agent:
         # self.embedded_target.visualize_head_output(state_tensor)  # Visualize the head output for debugging
         return action_number, message, raw_message_input
 
-    
-    
+    def debug_step(self, state, direction, messages, action, message, embedded_state, agent, save_path="debug_step"):
+        """
+        Enhanced debug visualization for model step analysis.
+        """
+        self.critic.eval()
+        self.embedded.head.eval()
+
+        # Convert inputs to tensors
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
+        messages_tensor = torch.FloatTensor(messages).unsqueeze(0).to(self.device)
+        # Forward pass
+        with torch.no_grad():
+            q1, q2 = self.critic(embedded_state, direction_tensor, messages_tensor, action)
+            q1 = q1.squeeze().cpu().numpy()
+            q2 = q2.squeeze().cpu().numpy()
+            reconstructed_image = self.embedded.head(state_tensor).squeeze().cpu().numpy()
+
+        embedded_np = embedded_state.squeeze().cpu().numpy()
+        flat_msg = messages.flatten()
+        
+        # === Evaluate critic over a sweep of test actions ===
+        test_actions = torch.FloatTensor(np.linspace(-4, 4, 10)).unsqueeze(1).to(self.device)  # Shape: (5, 1)
+        repeated_embedded = embedded_state.expand(test_actions.size(0), -1)
+        repeated_dir = direction_tensor.expand(test_actions.size(0), -1)
+        repeated_msgs = messages_tensor.expand(test_actions.size(0), -1)
+
+        with torch.no_grad():
+            q1s, q2s = self.critic(repeated_embedded, repeated_dir, repeated_msgs, test_actions)
+            q_vals = ((q1s + q2s) / 2.0).squeeze().cpu().numpy()
+            action_vals = test_actions.squeeze().cpu().numpy()
+
+
+        # === Start plotting ===
+        fig = plt.figure(figsize=(16, 12))
+        gs = gridspec.GridSpec(4, 3, height_ratios=[1, 1, 0.5, 1])
+
+        # ---- 4 State Channels (Top Left) ----
+        for i in range(4):
+            rgb_img = np.transpose(state[i*3:(i+1)*3], (1, 2, 0))  # Convert (3, H, W) → (H, W, 3)
+            ax = fig.add_subplot(gs[i // 2, i % 2])
+            ax.imshow(rgb_img)
+            ax.set_title(f"State Image {i}", fontsize=10)
+            ax.axis('off')
+        # ---- Reconstructed Image (Below State) ----
+        ax = fig.add_subplot(gs[1, 2])
+
+        # Assume reconstructed_image is (3, H, W) for RGB
+        if reconstructed_image.ndim == 3 and reconstructed_image.shape[0] == 3:
+            rgb_img = np.transpose(reconstructed_image, (1, 2, 0))  # (3, H, W) -> (H, W, 3)
+            ax.imshow(np.clip(rgb_img, 0, 1))  # Optional: ensure values are in displayable range
+        else:
+            ax.imshow(reconstructed_image)  # Fallback in case shape is already (H, W, 3)
+
+        ax.set_title("Reconstructed Image", fontsize=12)
+        ax.axis('off')
+        # ---- Action & Direction (Center Text Block) ----
+        ax = fig.add_subplot(gs[2, :])
+        action_text = f"Action Taken: {action}"
+        direction_text = f"Direction: {int(direction[0])}"
+        critic_text = f"Critic Values → Q1: {q1:.2f}, Q2: {q2:.2f}"
+        ax.text(0.05, 0.6, action_text, fontsize=18, fontweight='bold')
+        ax.text(0.05, 0.3, direction_text + " | " + critic_text, fontsize=14)
+        ax.axis('off')
+
+        # ---- Embedded State Features ----
+        ax = fig.add_subplot(gs[3, 0])
+        ax.bar(range(len(embedded_np)), embedded_np)
+        ax.set_title("Embedded State Features", fontsize=12)
+
+        # ---- Messages ----
+        ax = fig.add_subplot(gs[3, 1])
+        ax.bar(range(len(flat_msg)), flat_msg)
+        ax.set_title("Messages Vector", fontsize=12)
+
+        # ---- Raw Message Output ----
+        ax = fig.add_subplot(gs[3, 2])
+        message_np = message.squeeze().detach().cpu().numpy()
+        ax.bar(range(len(message_np)), message_np)
+        ax.set_title("Output Message Vector", fontsize=12)
+        
+        # ---- Q-Value Landscape for Sampled Actions ----
+        ax = fig.add_subplot(gs[2, 2])
+        ax.bar([f"{a:.2f}" for a in action_vals], q_vals)
+        ax.set_title("Q-Value vs. Sampled Actions", fontsize=12)
+        ax.set_xlabel("Action")
+        ax.set_ylabel("Avg Q-Value")
+
+        # Scale y-axis to the min/max of q_vals
+        ax.set_ylim(q_vals.min(), q_vals.max())
+
+        # Final touches
+        fig.subplots_adjust(hspace=0.7, wspace=0.4)
+        plt.suptitle("Debug Step Visualization", fontsize=18, fontweight='bold')
+
+        save_dir = os.path.join(save_path, agent)
+        os.makedirs(save_dir, exist_ok=True)
+
+        # List files and extract numeric filenames like "0.png", "1.png", etc.
+        existing_files = [f for f in os.listdir(save_dir) if f.endswith('.png')]
+        existing_indices = [
+            int(re.match(r"(\d+)\.png", f).group(1))
+            for f in existing_files
+            if re.match(r"(\d+)\.png", f)
+        ]
+        next_index = max(existing_indices, default=-1) + 1  # Start from 0 if none exist
+
+        # Build full file path
+        filename = f"{next_index}.png"
+        full_save_path = os.path.join(save_dir, filename)
+
+        # Save the figure
+        plt.savefig(full_save_path)
+        plt.close(fig)
+
     # Save model parameters
     def save(self, filename: str = "agent_checkpoint.pth"):
          # === Paths & Device ===
