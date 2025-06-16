@@ -81,3 +81,4 @@ class Trainer:
         if self.evaluator.should_evaluate(self.n_episodes):
             mean_score, rewards_all = self.evaluator.evaluate(self.n_episodes, self.n_steps)
             self.env_manager.env.modify_probs(rewards_all)
+        self.agent_manager.save(best= False)

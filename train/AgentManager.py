@@ -207,8 +207,11 @@ class AgentManager:
     def update_agent(self, step: int, logger: Optional[Any] = None) -> None:
         self.agent.learn(logger)
 
-    def save(self) -> None:
-        self.agent.save()
+    def save(self, best = True) -> None:
+        if best:
+            self.agent.save("best_checkpoint.pth")
+        else:
+            self.agent.save_checkpoint("checkpoint.pth")
 
     def load(self, path: str, evaluate: bool = False) -> None:
         self.agent.load(path, evaluate)
