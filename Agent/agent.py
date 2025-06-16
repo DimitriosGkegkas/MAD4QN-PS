@@ -443,7 +443,7 @@ class Agent:
             return
         
         # At each training step
-        self.target_entropy = max(self.min_entropy, self.target_entropy - self.entropy_decay_rate)
+        self.target_entropy = min(self.min_entropy, self.target_entropy + self.entropy_decay_rate)
 
 
     def update_networks(self):
