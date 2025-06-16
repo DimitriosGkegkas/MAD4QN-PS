@@ -211,7 +211,7 @@ class AgentManager:
         if best:
             self.agent.save("best_checkpoint.pth")
         else:
-            self.agent.save_checkpoint("checkpoint.pth")
+            self.agent.save("checkpoint.pth")
 
     def load(self, path: str, evaluate: bool = False) -> None:
         self.agent.load(path, evaluate)
