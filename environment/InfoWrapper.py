@@ -91,7 +91,7 @@ class AgentsInformationController():
         # communication map
         self.communication_map = {}
         for agent_name in start_inverse.keys():
-            self.communication_map[agent_name] = [start[pos] for pos in road_2_communication[start_inverse[agent_name]]]
+            self.communication_map[agent_name] = [start[pos] for pos in road_2_communication[start_inverse[agent_name]] if pos in start]
             
         return self.agents
     

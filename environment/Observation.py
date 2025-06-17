@@ -32,9 +32,9 @@ class Observation(gym.ObservationWrapper):
         )
         self.agent_names: List[str] = agent_names
         
-    def reset(self, *, seed = None, options = None):
+    def reset(self, **kwargs) -> Tuple[List[str], Dict[str, Any], List[str], List[str], Dict[str, np.ndarray], bool, bool, float, Dict[str, Any]]:
         """Modifies the :attr:`env` after calling :meth:`reset`, returning a modified observation using :meth:`self.observation`."""
-        turning_intentions, communication_map, msg, raw_msg, observation, termination, truncation, reward, infos = self.env.reset(seed=seed, options=options)
+        turning_intentions, communication_map, msg, raw_msg, observation, termination, truncation, reward, infos = self.env.reset(**kwargs)
         return  turning_intentions, communication_map, msg, raw_msg, self.observation(observation), termination, truncation, reward, infos
 
     def step(self, action):
