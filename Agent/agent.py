@@ -31,7 +31,7 @@ class AgentConfig:
     
     input_dim: Tuple[int, int, int] = (3, 32, 32)
     action_dim: int = 1
-    direction_dim: int = 1
+    direction_dim: int = 4
     feature_dim: int = 100
     message_dim: int = 8
     n_agents: int = 4
