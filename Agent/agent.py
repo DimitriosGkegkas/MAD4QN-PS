@@ -82,6 +82,8 @@ class Agent:
         self.actor_update_frequency = config.actor_update_frequency
         self.automatic_entropy_tuning = config.automatic_entropy_tuning
         self.entropy_decay_rate = config.entropy_decay_rate
+        self.agent_noise_states = {}  # Store noise states for each agent
+        self.chunk_interval = 10  # Interval for noise chunk updates
     
 
         self.chkpt_dir = os.path.join( config.chkpt_dir, datetime.now().strftime("%Y%m%d"))
@@ -481,7 +483,26 @@ class Agent:
             # === Embed own state ===
             embedded_state = self.embedded(state_tensor)  # shape: [1, D]
             dist, mu = self.policy.forward(embedded_state, direction_tensor, messages_tensor)
-            action = dist.sample() if not evaluate else dist.mean
+
+            # === Choose action ===
+            if evaluate:
+                action = dist.mean
+            else:
+                action_dim = dist.loc.shape[-1]
+                if agent not in self.agent_noise_states:
+                    self.agent_noise_states[agent] = {
+                        "z": torch.zeros(action_dim),
+                        "counter": 0
+                    }
+
+                noise_state = self.agent_noise_states[agent]
+                if noise_state["counter"] % self.chunk_interval == 0:
+                    noise_state["z"] = torch.randn(action_dim)
+                noise_state["counter"] += 1
+
+                z = noise_state["z"].to(dist.loc.device)
+                action = dist.sample(z=z)
+
             action = action.clamp(-1 , 1)
             # === Prepare message input ===
             raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
@@ -507,7 +528,6 @@ class Agent:
         Enhanced debug visualization for model step analysis.
         """
         self.critic.eval()
-        self.embedded.head.eval()
 
         # Convert inputs to tensors
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)

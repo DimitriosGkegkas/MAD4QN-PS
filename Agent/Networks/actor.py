@@ -56,6 +56,33 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
         for tr in self.transforms:
             mu = tr(mu)
         return mu
+    
+
+    def rsample(self, sample_shape=torch.Size(), z=None):
+        """
+        Reparameterized sample with optional structured noise z.
+        If z is None, it samples z ~ N(0, 1) from the base distribution.
+        """
+        if z is None:
+            z = self.base_dist.rsample(sample_shape)
+        else:
+            # Ensure shape matches
+            if isinstance(z, np.ndarray):
+                z = torch.tensor(z, dtype=torch.float32, device=self.loc.device)
+            z = z.expand_as(self.loc)
+
+        x = self.loc + self.scale * z
+        for transform in self.transforms:
+            x = transform(x)
+        return x
+
+    def sample(self, sample_shape=torch.Size(), z=None):
+        """
+        Non-reparameterized sample with optional structured noise z.
+        If z is None, uses default sampling from base distribution.
+        """
+        with torch.no_grad():
+            return self.rsample(sample_shape=sample_shape, z=z)
 
 
 

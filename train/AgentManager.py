@@ -6,6 +6,7 @@ from Agent import Agent, agent
 from dataclasses import dataclass
 
 from energy import config
+from train.BaseTrainer import BaseTrainer
 
 
 class AgentManager:
@@ -13,6 +14,7 @@ class AgentManager:
         self,
         agent_names: List[str],
         agent_config: agent.AgentConfig,
+        logger: BaseTrainer,
         evaluate: bool = False,
         parallel: bool = True
     ):
@@ -20,6 +22,7 @@ class AgentManager:
         self.evaluate = evaluate
         self.message_dim = agent_config.message_dim
         self.parallel = parallel
+        self.logger = logger
         
 
         self.agent = Agent(agent_config)
@@ -204,8 +207,8 @@ class AgentManager:
         """
         self.direction = direction
         
-    def update_agent(self, step: int, logger: Optional[Any] = None) -> None:
-        self.agent.learn(logger)
+    def update_agent(self, step: int) -> None:
+        self.agent.learn(self.logger)
 
     def save(self, best = True) -> None:
         if best:

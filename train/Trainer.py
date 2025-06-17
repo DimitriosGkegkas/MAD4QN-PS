@@ -48,13 +48,13 @@ class Trainer:
         self.agent_manager.set_communication(communication)
         self.agent_manager.set_direction(direction)
 
-        while not self.episode_manager.is_done(current_state, reward, terminate, infos) and ep_steps < self.max_training_steps:
+        while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_training_steps:
             action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
             
             next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
 
             self.agent_manager.store_transitions(current_state, current_raw_messages, action, reward, next_state, next_raw_messages, terminate, truncated)
-            self.agent_manager.update_agent(step=self.n_steps, logger=self.logger)
+            self.agent_manager.update_agent(step=self.n_steps)
             
             current_state = next_state
             current_messages = next_messages
@@ -64,6 +64,8 @@ class Trainer:
             
             scores = [sum(r.values()) + s for r, s in zip(reward, scores)]
             self.logger.after_train_step(np.mean(scores), self.n_episodes, ep_steps)
+        
+
 
         # Log and evaluate
         self.logger.after_episode_batch(

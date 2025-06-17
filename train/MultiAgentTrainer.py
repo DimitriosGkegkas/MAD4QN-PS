@@ -85,6 +85,7 @@ class MultiAgentTrainerParallel:
             agent_config=agent_config,
             evaluate=config.evaluate,
             parallel=config.parallel,
+            logger=self.logger,
         )
         
         

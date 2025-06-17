@@ -66,7 +66,7 @@ class Evaluator:
         self.agent_manager.set_communication(communication)
         self.agent_manager.set_direction(direction)
 
-        while not self.episode_manager.is_done(current_state, reward, terminate, infos) and ep_steps < self.max_evaluation_steps:
+        while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
             action, next_messages, _  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
             
             next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
@@ -116,7 +116,7 @@ class Evaluator:
         self.agent_manager.set_communication(communication)
         self.agent_manager.set_direction(direction)
 
-        while not self.episode_manager.is_done(current_state, reward, terminate, infos) and ep_steps < self.max_evaluation_steps:
+        while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
             action, next_messages, _  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
             
             next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
