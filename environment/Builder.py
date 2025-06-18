@@ -8,6 +8,7 @@ from .StackFrames import StackFrames
 from .Scenarios import Scenarios
 from .ParallelEnvWithScenario import ParallelEnvWithScenario
 from .InfoWrapper import InfoWrapper
+from .SocialAgentsWrapper import SocialAgentsWrapper
 
 
 
@@ -23,7 +24,8 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, stack_fr
         scenarios_order = ScenarioOrder.sequential
     )
     agent_names = agent_interfaces.keys()
-
+    
+    env = SocialAgentsWrapper(env, agent_names=agent_names)
     env = InfoWrapper(env, agent_names=agent_names)
     env = Reward(env=env, agent_names=agent_names)
     env = Observation(shape=observation_shape, env=env, agent_names=agent_names)
@@ -49,6 +51,8 @@ def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed,
             scenarios_order = ScenarioOrder.sequential,
             sim_name=sim_name
         )
+        
+        env = SocialAgentsWrapper(env, agent_names=agent_names)
         env = InfoWrapper(env, agent_names=agent_names)
         env = Reward(env=env, agent_names=agent_names)
         env = Observation(shape=observation_shape, env=env, agent_names=agent_names)

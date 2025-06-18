@@ -9,7 +9,7 @@
 # """
 
 
-roads2t_i = {
+roads_to_direction = {
     'EW': [0, 1, 0, 0],
     'ES': [0, 1, 1, 1],
     'EN': [0, 1, 1, 0],
@@ -27,12 +27,7 @@ roads2t_i = {
     'NW': [1, 0, 0, 0], 
 }
 
-# roads2t_i = {'EW': [0], 'ES': [-1], 'EN': [1],
-#              'WE': [0], 'WN': [-1], 'WS': [1],
-#              'SN': [0], 'SW': [-1], 'SE': [1],
-#              'NS': [0], 'NE': [-1], 'NW': [1]}
-
-road_2_communication = {
+road_to_communication = {
     'E': ['S', 'W', 'N'],
     'W': ['N', 'E', 'S'],
     'S': ['W', 'N', 'E'],
@@ -40,7 +35,7 @@ road_2_communication = {
 }
 
 
-def position2road(position):
+def position_to_road(position):
     if position[0] > 50:
         return 'E'
     elif position[0] < 30:
