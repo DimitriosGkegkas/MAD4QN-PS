@@ -28,6 +28,9 @@ class Direction(gym.ObservationWrapper):
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)
+        for agent in observation:
+            if agent not in self.directions:
+                self.directions[agent] = get_direction_vector_from_info(info[agent])
         return self.observation(observation), reward, terminated, truncated, info
 
     def observation(self, obs: Dict[str, Any]) -> Dict[str, Any]:
@@ -44,7 +47,7 @@ class Direction(gym.ObservationWrapper):
 
 
 def get_direction_vector(mission):
-    start = position_to_road([mission.start.position.x, mission.start.position.y])
+    start = position_to_road([mission.start.position[0], mission.start.position[1]])
     goal = position_to_road([mission.goal.position.x, mission.goal.position.y])
     roads = start + goal
     return roads_to_direction[roads]

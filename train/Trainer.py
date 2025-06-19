@@ -67,7 +67,7 @@ class Trainer:
         self.logger.after_episode_batch(
             episode=self.n_episodes,
             stats={
-                "reward/min": np.mean(scores),
+                "reward/mean": np.mean(scores),
                 "reward/max": np.max(scores),
                 "reward/min": np.min(scores),
                 "steps": ep_steps,
@@ -75,8 +75,8 @@ class Trainer:
         )
 
         self.n_episodes += 1
-
+        self.env_manager.env.modify_probs(self.n_episodes)
+        
         if self.evaluator.should_evaluate(self.n_episodes):
-            mean_score, rewards_all = self.evaluator.evaluate(self.n_episodes, self.n_steps)
-            self.env_manager.env.modify_probs(rewards_all)
+            self.evaluator.evaluate(self.n_episodes, self.n_steps)
         self.agent_manager.save(best= False)

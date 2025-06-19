@@ -4,7 +4,8 @@ import sys
 import numpy as np
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
-
+from environment.help_scenario import all_scenarios_to_number_of_agents
+from collections import defaultdict
 class BaseTrainer:
     def __init__(self, algorithm_identifier: str, enable_tensorboard: bool = True, evaluate: bool = False):
         self.scores_list: List[Tuple[float, str, int]] = []
@@ -13,6 +14,8 @@ class BaseTrainer:
 
         self.run_name = os.path.join(algorithm_identifier, self.start_time.strftime("%d%m%Y_%H%M%S"))
         self.training_stats_path = None if evaluate else f"training_stats/{self.run_name}"
+        
+        self.scenario_count = 0
 
         self.writer: Optional[SummaryWriter] = None
         if self.training_stats_path is not None and enable_tensorboard:
@@ -62,10 +65,27 @@ class BaseTrainer:
         for key, value in stats.items():
             self.log_scalar(tag=f"episode/{key}", value=value, step=episode)
 
-    def after_evaluation(self, episode: int, scenario_rewards: List[float]) -> None:
-        """Called after evaluation: log histogram of scenario scores."""
-        print(f"\nEvaluation complete for episode {episode} with rewards: {np.mean(scenario_rewards)}")
-        self.log_histogram(tag="Evaluation/Scenario_Rewards", values=scenario_rewards, step=episode)
+    def after_evaluation(self, rewards, scenario_ids: List[int], episode: int, n_steps: int) -> None:
+        print(f"\nEvaluation complete for episode {episode} with rewards: {np.mean(rewards)}")
+        self.log_scalar("reward/eval", np.mean(rewards), n_steps)
+        self.log_histogram("reward/eval_distribution", rewards, episode)
+        
+        # Step 1: Group rewards by agent count
+        rewards_by_agent_count = defaultdict(list)
+        for reward, scenario_id in zip(rewards, scenario_ids):
+            agent_count = all_scenarios_to_number_of_agents[scenario_id]
+            rewards_by_agent_count[agent_count].append(reward)
+
+        # Step 2: Log average reward per agent count bucket
+        for agent_count, grouped_rewards in rewards_by_agent_count.items():
+            avg_reward = np.mean(grouped_rewards)
+            self.log_scalar(f"reward/eval/{agent_count}", avg_reward, n_steps)
+            print(f"  Avg reward for {agent_count} agents: {avg_reward:.2f}")
+
+    def scenario_log(self, scenario_id: int, ) -> None:
+        """Log the scenario ID being evaluated."""
+        self.writer.add_text("scenario_sampling/scenario_id", str(scenario_id), self.scenario_count)
+        self.scenario_count += 1
 
     # --- Misc Utils ---
     def slice_list(self, items: List[Any], chunk_size: int) -> List[List[Any]]:

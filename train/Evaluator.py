@@ -15,7 +15,7 @@ class Evaluator:
         episode_manager: EpisodeManager,  # ScenarioManager instance
         env_manager: EnvironmentManager,     # EnvironmentManager instance
         evaluation_step: int,
-        total_scenarios: int,
+        eval_scenarios: List[int],
         max_evaluation_steps: int = 1000,
         checkpoint_enabled: bool = True,
     ):
@@ -26,7 +26,7 @@ class Evaluator:
         self.evaluation_step = evaluation_step
         self.checkpoint_enabled = checkpoint_enabled
         self.best_score = -np.inf
-        self.total_scenarios = total_scenarios
+        self.eval_scenarios = eval_scenarios
         self.max_evaluation_steps = max_evaluation_steps
         self.evaluate_step = 0
 
@@ -37,24 +37,26 @@ class Evaluator:
         self.agent_manager.eval()
         rewards_all: List[float] = []
         self.logger.log_percentage(0.0)
-
-        for i, scenario_ids in enumerate(self.logger.slice_list(list(range(self.total_scenarios)), self.env_manager.num_env)):
+        
+        for i, scenario_ids in enumerate(self.logger.slice_list(self.eval_scenarios, self.env_manager.num_env)):
+            
+            if len(scenario_ids) < self.env_manager.num_env:
+                continue  # Skip if not enough scenarios for the number of environments
+            
             scores = self._episode_eval(scenario_ids)
             rewards_all.extend(scores)
-            self.logger.log_percentage(len(rewards_all) / self.total_scenarios)
+            self.logger.log_percentage(len(rewards_all) / len(self.eval_scenarios))
             
-        self.logger.after_evaluation(episode = self.evaluate_step, scenario_rewards=rewards_all)
+        self.logger.after_evaluation(rewards_all, self.eval_scenarios[:len(rewards_all)], n_episodes, n_steps)
         self.evaluate_step += 1
 
         mean_score = float(np.mean(rewards_all))
-        self.logger.log_scalar("reward/eval", mean_score, n_episodes)
-        self.logger.log_histogram("reward/eval_distribution", rewards_all, n_episodes)
 
         if self.checkpoint_enabled and mean_score > self.best_score:
             self.agent_manager.save()
             self.best_score = mean_score
 
-        return mean_score, rewards_all
+        return
 
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
         current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
@@ -67,7 +69,8 @@ class Evaluator:
             current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
 
             ep_steps += 1
-            scores = [sum(r.values()) + s for r, s in zip(reward, scores)]
+            avg_rewards = [np.mean(list(r.values())) for r in reward if len(list(r.values())) > 0]
+            scores = [s + r for s, r in zip(scores, avg_rewards)]
 
         return scores
 

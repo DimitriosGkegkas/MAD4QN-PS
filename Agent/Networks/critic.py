@@ -1,5 +1,8 @@
+from typing import List
 import torch
 import torch.nn as nn
+
+from Agent.Networks.communication import MessageAggregator
 
 def weights_init_(m):
     if isinstance(m, nn.Linear):
@@ -7,8 +10,10 @@ def weights_init_(m):
         nn.init.constant_(m.bias, 0)
 
 class CriticNetwork(nn.Module):
-    def __init__(self, feature_dim, direction_dim, message_dim, action_dim=1, hidden_dim=[256, 256], dropout_p=0.2):
+    def __init__(self, feature_dim, direction_dim, message_dim, device, action_dim=1, hidden_dim=[256, 256], dropout_p=0.2):
         super(CriticNetwork, self).__init__()
+        self.device = device
+        
 
         # Input dimension after concatenating state and action
         critic_input_dim = feature_dim + direction_dim + message_dim + action_dim
@@ -18,6 +23,13 @@ class CriticNetwork(nn.Module):
 
         # Q2 stream
         self.q2 = self._build_stream(critic_input_dim, 1, hidden_dim, dropout_p)
+        
+        self.aggregator = MessageAggregator(
+            message_dim=message_dim,
+            max_msgs=4,
+            aggregation_type="mean",
+            device=self.device
+        )
 
         self.apply(weights_init_)
 
@@ -33,8 +45,9 @@ class CriticNetwork(nn.Module):
         layers.append(nn.Linear(in_dim, output_dim))
         return nn.Sequential(*layers)
 
-    def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: torch.Tensor, action: torch.Tensor):
-        x = torch.cat([embedded, direction, messages, action], dim=-1)
+    def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: List[torch.Tensor], action: torch.Tensor):
+        message = self.aggregator(messages)
+        x = torch.cat([embedded, direction, message, action], dim=-1)
         q1 = self.q1(x)
         q2 = self.q2(x)
         return q1, q2

@@ -1,3 +1,4 @@
+from typing import List
 import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
@@ -8,6 +9,7 @@ import math
 from torch import nn
 from torch import distributions as pyd
 
+from Agent.Networks.communication import MessageAggregator
 import utils
 
 
@@ -97,10 +99,12 @@ class ActorNetwork(nn.Module):
         direction_dim: int,
         message_dim: int,
         action_dim: int,
+        device, 
         hidden_dim: list = [256, 128, 64],
-        dropout_p: float = 0.3
+        dropout_p: float = 0.3,
     ):
         super(ActorNetwork, self).__init__()
+        self.device = device
 
         in_dim = feature_dim + direction_dim + message_dim
         layers = []
@@ -115,11 +119,18 @@ class ActorNetwork(nn.Module):
 
         self.mean_linear = nn.Linear(in_dim, action_dim)
         self.log_std_linear = nn.Linear(in_dim, action_dim)
+        self.aggregator = MessageAggregator(
+            message_dim=message_dim,
+            device=self.device,
+            max_msgs=4,
+            aggregation_type="mean"
+        )
 
         self.apply(utils.weight_init)
 
-    def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: torch.Tensor):
-        x = torch.cat([embedded, direction, messages], dim=-1)
+    def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: List[torch.Tensor]):
+        message = self.aggregator(messages)
+        x = torch.cat([embedded, direction, message], dim=-1)
         x = self.net(x)  # apply hidden layers
         mu = self.mean_linear(x)
         log_std = self.log_std_linear(x)

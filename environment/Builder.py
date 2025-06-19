@@ -26,7 +26,7 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, stack_fr
         seed=seed,
         scenarios_order = ScenarioOrder.sequential
     )
-    agent_names = agent_interfaces.keys()
+    agent_names = list(agent_interfaces.keys())
     
     env = SocialAgentsWrapper(env, agent_names=agent_names)
     env = InfoWrapper(env, agent_names=agent_names)
@@ -42,9 +42,9 @@ def make_env(env_name, agent_interfaces, scenario_path, headless, seed, stack_fr
 
 
 
-def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed, num_env=10, stack_frames = 4,  observation_shape=(32, 32, 3), message_dim=8, message_raw_dim=8) -> gym.Env:
+def make_env_parallel(env_name, agent_interfaces, scenario_path, headless, seed, num_env=10, stack_frames = 4,  observation_shape=(32, 32, 3), message_dim=8, message_raw_dim=8, ) -> gym.Env:
     # Create environment
-    agent_names = agent_interfaces.keys()
+    agent_names = list(agent_interfaces.keys())
     def env_constructor(sim_name, seed):
         env = gym.make(
             env_name,

@@ -11,8 +11,8 @@ class StackFrames(gym.ObservationWrapper):
         self.observation_space = gym.spaces.Box(env.observation_space.low.repeat(repeat, axis=0),
                                                 env.observation_space.high.repeat(repeat, axis=0),
                                                 dtype=np.float32)
-        self.stack = [collections.deque(maxlen=repeat), collections.deque(maxlen=repeat),
-                      collections.deque(maxlen=repeat), collections.deque(maxlen=repeat)]
+        self.stack = {}  # agent_id -> deque
+        self.repeat = repeat
         self.agent_names = agent_names
 
     def step(self, *args, **kwargs) -> tuple:
@@ -20,36 +20,25 @@ class StackFrames(gym.ObservationWrapper):
         observation, reward, terminated, truncated, info = self.env.step(*args, **kwargs)
         return self.observation(observation), reward, terminated, truncated, info
     
-    def reset(self,
-        *,
-        seed = None,
-        options = None,
-              ):
-        self.stack[0].clear()
-        self.stack[1].clear()
-        self.stack[2].clear()
-        self.stack[3].clear()
-
-        observation, termination, truncation, reward, infos = self.env.reset(seed=seed, options=options)
-        for i, j in enumerate(self.agent_names):
-            for _ in range(self.stack[i].maxlen):
-                self.stack[i].append(observation[j])
-        obs_dict = {}
-
-        for i, j in enumerate(self.agent_names):
-            obs_dict[j] = np.array(self.stack[i]).reshape(self.observation_space.low.shape)
+    def reset(self, **kwargs):
+        self.stack = {}
         
+        observation, termination, truncation, reward, infos = self.env.reset(**kwargs)
         return self.observation(observation), termination, truncation, reward, infos
+
 
     def observation(self, observation):
         obs_dict = {}
 
-        for i, j in enumerate(self.agent_names):
-            if j in observation.keys():
-                self.stack[i].append(observation[j])
-                obs_dict[j] = np.array(self.stack[i]).reshape(self.observation_space.low.shape)
+        for agent_id, obs in observation.items():
+            if agent_id not in self.stack:
+                # New agent → initialize deque with repeated current obs
+                self.stack[agent_id] = collections.deque([obs] * self.repeat, maxlen=self.repeat)
+            else:
+                self.stack[agent_id].append(obs)
+
+            obs_dict[agent_id] = np.array(self.stack[agent_id]).reshape(self.observation_space.low.shape)
 
         return obs_dict
-
 
 

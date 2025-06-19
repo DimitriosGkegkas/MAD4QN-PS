@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import torch.nn.functional as F
 from torch.optim import Adam
+from zmq import device
 from Agent.utils import soft_update, hard_update
 from train.BaseTrainer import BaseTrainer
 from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder, MessageDecoder
@@ -89,7 +90,6 @@ class Agent:
         self.chkpt_dir = os.path.join( config.chkpt_dir, datetime.now().strftime("%Y%m%d"))
 
         self.updates = 0
-        self.total_message_dim = (self.n_agents - 1) * self.message_dim
 
 
         try:
@@ -102,7 +102,8 @@ class Agent:
             print(f"Error checking available GPUs: {e}")
             print("Falling back to CPU.")
             self.device = torch.device("cpu")
-            
+        # Total raw input: [feature || direction || action]
+        encoder_input_dim = self.feature_dim + self.direction_dim + self.action_dim
 
         # Embedding network
         self.embedded = EmbeddedNetwork(input_dim=self.input_dim, feature_dim=self.feature_dim).to(self.device)
@@ -113,17 +114,19 @@ class Agent:
         self.critic_target = CriticNetwork(
             feature_dim=self.feature_dim,
             direction_dim=self.direction_dim,
-            message_dim=self.total_message_dim,
+            message_dim=encoder_input_dim,
             action_dim=self.action_dim,
-            hidden_dim=config.critic_hidden_dim
+            hidden_dim=config.critic_hidden_dim,
+            device=self.device
         ).to(self.device)
 
         self.critic = CriticNetwork(
             feature_dim=self.feature_dim,
             direction_dim=self.direction_dim,
-            message_dim=self.total_message_dim,
+            message_dim=encoder_input_dim,
             action_dim=self.action_dim,
-            hidden_dim=config.critic_hidden_dim
+            hidden_dim=config.critic_hidden_dim,
+            device=self.device
         ).to(self.device)
         hard_update(self.critic_target, self.critic)  # Initialize target network with same weights
 
@@ -132,13 +135,12 @@ class Agent:
         self.policy = ActorNetwork(
             feature_dim=self.feature_dim,
             direction_dim=self.direction_dim,
-            message_dim=self.total_message_dim,
+            message_dim=self.message_dim,
             action_dim=self.action_dim,
-            hidden_dim=config.actor_hidden_dim
+            hidden_dim=config.actor_hidden_dim,
+            device=self.device
         ).to(self.device)
         
-        # Total raw input: [feature || direction || action]
-        encoder_input_dim = self.feature_dim + self.direction_dim + self.action_dim
 
         self.message_encoder = MessageEncoder(
             input_dim=encoder_input_dim,
@@ -155,12 +157,16 @@ class Agent:
 
         # === Optimizers ===
         self.critic_optim = Adam(
-            list(self.critic.parameters()) + list(self.embedded.parameters()) +
-            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()),
+            list(self.critic.parameters()) + list(self.embedded.parameters()),
             lr=self.lr,
             weight_decay=1e-4
         )
-        self.policy_optim = Adam(self.policy.parameters(), lr=self.lr,  weight_decay=1e-4)
+        self.policy_optim = Adam(
+            list(self.policy.parameters()) + 
+            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), 
+            lr=self.lr,  
+            weight_decay=1e-4
+            )
 
         # === Entropy tuning ===
         if self.automatic_entropy_tuning:
@@ -204,21 +210,25 @@ class Agent:
             done=done
         )
 
-    def encode_messages(self, message_batch: List[List[torch.Tensor]]) -> torch.Tensor:  
-              
-        return torch.stack([
-            torch.cat([self.message_encoder(torch.Tensor(m).to(self.device)) if m is not None else torch.zeros(self.message_dim).to(self.device) for m in raw_msgs], dim=-1)
-            for raw_msgs in message_batch
-        ]).to(self.device)  # [B, total_msg_dim]
+    def encode_messages(self, message_batch: List[List[torch.Tensor]]) -> List[List[torch.Tensor]]:
+        """
+        message_batch: List of List of input tensors (each tensor = raw message vector)
+        Returns:
+            List of List of encoded messages (each tensor = [message_dim])
+        """
+        encoded_batch = []
+        for raw_msgs in message_batch:
+            encoded_msgs = [self.message_encoder(torch.FloatTensor(msg).to(self.device)) for msg in raw_msgs]
+            encoded_batch.append(encoded_msgs)
+        return encoded_batch
 
     def get_reconstruction_loss(
         self,
         action_batch: torch.Tensor,
-        state: torch.Tensor,
+        embedded_state: torch.Tensor,
         direction_batch: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
-            embedded_state = self.embedded(state)
             raw_input = torch.cat([action_batch, embedded_state, direction_batch], dim=-1)
         encoded = self.message_encoder(raw_input)
         decoded = self.message_decoder(encoded)
@@ -261,7 +271,7 @@ class Agent:
             next_action = dist.rsample()
             log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
             # Compute target Q-values
-            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, encoded_next_messages, next_action)
+            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, next_message_batch, next_action)
             target_V = torch.min(target_Q1,
                                 target_Q2) - self.alpha.detach() * log_prob
             target_q = reward_batch + ((1 - done_batch) * self.gamma * target_V)
@@ -270,10 +280,8 @@ class Agent:
             
         # 1. Embed current state
         embedded_state = self.embedded(current_state_batch)
-        # 2. Encode messages
-        encoded_current_messages = self.encode_messages(message_batch)
         # 3. Compute Q-values for current state and action
-        q1, q2 = self.critic(embedded_state, direction_batch, encoded_current_messages, action_batch)
+        q1, q2 = self.critic(embedded_state, direction_batch, message_batch, action_batch)
         # Critic loss calculation  
         q1_loss = F.mse_loss(q1, target_q)
         q2_loss = F.mse_loss(q2, target_q)
@@ -281,7 +289,6 @@ class Agent:
         
         return critic_loss
         
-
     def train_critic(
         self,
         current_state_batch: torch.Tensor,
@@ -306,16 +313,9 @@ class Agent:
             next_message_batch,
             done_batch
         )
-
-        # Reconstruction loss
-        recon_loss = self.get_reconstruction_loss(action_batch, current_state_batch, direction_batch)
-        
-
         # Total loss
-        total_loss = (
-            critic_loss +
-            self.reconstruction_coef * recon_loss
-        )
+        total_loss = critic_loss 
+        
 
         # Optimize Critic Network
         self.critic_optim.zero_grad()  # Clear previous gradients
@@ -326,12 +326,7 @@ class Agent:
             return
         
         logger.log_scalar("loss/critic", critic_loss.item(), self.updates)
-        logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
-    
-    
 
-        
-        
     def train_actor(
         self,
         state_batch: torch.Tensor,
@@ -343,8 +338,8 @@ class Agent:
             # === Embed current state ===
             embedded_state = self.embedded(state_batch).detach()  # [B, feature_dim]
             
-            # === Aggregate messages ===
-            encoded_current_messages = self.encode_messages(message_batch).detach()  # [B, total_msg_dim]
+        # === Aggregate messages ===
+        encoded_current_messages = self.encode_messages(message_batch)  # [B, total_msg_dim]
 
         # === Sample action and compute policy loss ===
         dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
@@ -352,12 +347,17 @@ class Agent:
         action = dist.rsample()
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         # Compute the policy loss using the critic's Q-values
-        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, encoded_current_messages, action)
+        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, message_batch, action)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
 
+
+        # Reconstruction loss
+        recon_loss = self.get_reconstruction_loss(action, embedded_state, direction_batch)
+
         # === Total loss ===
         total_loss = actor_loss
+        total_loss += self.reconstruction_coef * recon_loss
         # total_loss += self.reg_coef * regularization_loss  # Add regularization loss
 
         # === Optimize policy ===
@@ -388,6 +388,7 @@ class Agent:
         logger.log_scalar("loss/actor", actor_loss.item(), self.updates)
         regularization_loss = torch.mean(torch.clamp(torch.abs(mu) - 1.0, min=0.0) ** 2)
         logger.log_scalar("policy/regularization", regularization_loss.item(), self.updates)
+        # logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
         
         
 
@@ -473,10 +474,7 @@ class Agent:
         # === Format input ===
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
-        messages_tensor = torch.FloatTensor(messages).unsqueeze(0).to(self.device)
-
-
-        
+        messages_tensor = torch.FloatTensor(np.array(messages)).unsqueeze(0).to(self.device)
 
         # === Choose action ===
         with torch.no_grad():
@@ -532,7 +530,7 @@ class Agent:
         # Convert inputs to tensors
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
-        messages_tensor = torch.FloatTensor(messages).unsqueeze(0).to(self.device)
+        messages_tensor = torch.FloatTensor(np.array(messages)).unsqueeze(0).to(self.device)
         # Forward pass
         with torch.no_grad():
             q1, q2 = self.critic(embedded_state, direction_tensor, messages_tensor, action)
@@ -647,10 +645,9 @@ class Agent:
 
             # === Optional entropy tuning ===
             'automatic_entropy_tuning': self.automatic_entropy_tuning,
-            'alpha': self.alpha,
             'target_entropy': getattr(self, 'target_entropy', None),
             'log_alpha': getattr(self, 'log_alpha', None).detach().cpu() if hasattr(self, 'log_alpha') else None,
-            'alpha_optimizer_state_dict': getattr(self, 'alpha_optim', None).state_dict() if hasattr(self, 'alpha_optim') else None,
+            'alpha_optimizer_state_dict': getattr(self, 'log_alpha_optimizer', None).state_dict() if hasattr(self, 'log_alpha_optimizer') else None,
 
             # === Hyperparameters for tracking ===
             'hyperparameters': {
@@ -689,13 +686,13 @@ class Agent:
         self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
 
         # === Load alpha/entropy if available ===
-        # if checkpoint.get('automatic_entropy_tuning', False):
-        #     self.automatic_entropy_tuning = True
-        #     self.alpha = checkpoint.get('alpha', self.alpha)
-        #     self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
-        #     self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
-        #     self.log_alpha = self.log_alpha.to(self.device)
-        #     self.alpha_optim.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
+        if checkpoint.get('automatic_entropy_tuning', False):
+            self.automatic_entropy_tuning = True
+            self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
+            self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
+            self.log_alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
+            self.log_alpha = torch.tensor(self.log_alpha).to(self.device)
+            self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
         for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder, self.message_decoder]:

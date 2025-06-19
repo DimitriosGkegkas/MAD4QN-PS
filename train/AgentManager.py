@@ -124,6 +124,15 @@ class AgentManager:
         terminate: List[Dict[str, bool]],
         truncated: List[Dict[str, bool]]
     ) -> None:
+        if not isinstance(current_state, Dict):
+            self.store_transition(
+                current_state,
+                action,
+                reward,
+                next_state,
+                terminate,
+                truncated
+            )
         for i in range(len(current_state)):
             self.store_transition(
                 current_state[i],

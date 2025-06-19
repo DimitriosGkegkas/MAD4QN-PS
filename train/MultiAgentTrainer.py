@@ -1,7 +1,8 @@
 from math import gamma
-from typing import Any
+from typing import Any, List
 from datetime import datetime
 import numpy as np
+from py import log
 from Agent.agent import AgentConfig
 from train.BaseTrainer import BaseTrainer
 from train.AgentManager import AgentManager
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from smarts.core.agent_interface import AgentInterface
 from smarts.zoo.agent_spec import AgentSpec
 from smarts.core.controllers import ActionSpaceType
+from dataclasses import dataclass, field
 
 @dataclass
 class TrainerConfig:
@@ -29,6 +31,23 @@ class TrainerConfig:
     max_training_steps: int = 1000  # Maximum steps per episode, can be adjusted based on the environment
     max_evaluation_steps: int = 1000  # Maximum steps per evaluation episode, can be adjusted based on the environment
     
+    eval_scenarios: List[int] =  field(default_factory=lambda: [
+                                # Length 1 (4)
+                                0, 2, 5, 8,
+
+                                # Length 2 (10)
+                                13, 17, 21, 27, 31, 34, 39, 45, 48, 53,
+
+                                # Length 3 (16)
+                                65, 68, 72, 75, 78, 81, 85, 89,
+                                92, 95, 98, 101, 105, 108, 111, 114,
+
+                                # Length 4 (26)
+                                120, 123, 126, 129, 132, 135, 138, 141, 144,
+                                147, 150, 153, 156, 159, 162, 165, 168, 171,
+                                174, 177, 180, 183, 186, 189, 192, 195
+                            ])
+                                
     
     # Agent Learning
     seed: int = 42
@@ -61,6 +80,13 @@ class MultiAgentTrainerParallel:
         agent_config: AgentConfig
     ):
         self.evaluate = config.evaluate
+        
+        self.logger = BaseTrainer( 
+                    algorithm_identifier = config.algorithm_identifier, 
+                    enable_tensorboard=config.tensorboard, 
+                    evaluate=config.evaluate,
+                    )
+        
 
         self.env_manager = EnvironmentManager(
             agent_count=config.agent_count,
@@ -74,12 +100,11 @@ class MultiAgentTrainerParallel:
             evaluate=config.evaluate,  # If True, use parallel environments for evaluation
             observation_shape=config.observation_shape,
             message_dim=agent_config.message_dim,
-            message_raw_dim=agent_config.feature_dim + agent_config.action_dim + agent_config.direction_dim
+            message_raw_dim=agent_config.feature_dim + agent_config.action_dim + agent_config.direction_dim,
         )
         agent_names = self.env_manager.get_agent_names()
         self.episode_manager = EpisodeManager(agent_names, parallel=config.parallel)
-        self.logger = BaseTrainer( algorithm_identifier = config.algorithm_identifier, enable_tensorboard=config.tensorboard, evaluate=config.evaluate,)
-        
+
         agent_config.input_dim = (config.observation_shape[2] * config.stack_frames, config.observation_shape[0], config.observation_shape[1])
         agent_config.chkpt_dir = f"models/{config.algorithm_identifier}"
         self.agent_manager = AgentManager(
@@ -98,7 +123,7 @@ class MultiAgentTrainerParallel:
             env_manager=self.env_manager,
             evaluation_step=config.evaluation_step,
             max_evaluation_steps=config.max_evaluation_steps,
-            total_scenarios=len(self.env_manager.get_scenarios())
+            eval_scenarios=config.eval_scenarios
         )
         
         self.trainer = Trainer(

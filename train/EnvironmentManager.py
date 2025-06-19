@@ -39,7 +39,7 @@ class EnvironmentManager:
 
         scenarios_path = pathlib.Path(__file__).absolute().parent.parent / self.scenario_subdir
         self.scenarios = [
-            str(scenario) for scenario in scenarios_path.iterdir() if not scenario.is_file()
+            scenarios_path
         ]
         self.scenarios.sort()
 
@@ -52,7 +52,7 @@ class EnvironmentManager:
                 stack_frames=stack_frames, 
                 observation_shape=observation_shape,
                 message_dim=message_dim,
-                message_raw_dim=message_raw_dim
+                message_raw_dim=message_raw_dim,
             )
         else:
             self.env = make_env(
