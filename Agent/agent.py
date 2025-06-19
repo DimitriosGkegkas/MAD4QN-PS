@@ -375,7 +375,7 @@ class Agent:
                 logger.log_scalar("loss/alpha", alpha_loss.item(), self.updates)
                 logger.log_scalar("alpha", self.alpha, self.updates)
                 logger.log_scalar("target_entropy", self.target_entropy, self.updates)
-            self.update_target_entropy()
+            # self.update_target_entropy()
         
         if logger is None:
             return
