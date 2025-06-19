@@ -1,3 +1,4 @@
+from email import message
 from typing import Optional, List, Dict, Any, Union
 import torch
 import pathlib
@@ -18,8 +19,9 @@ class EnvironmentManager:
         num_env: int = 1,
         seed: int = 42,
         stack_frames: int = 4,
-        observation_shape: tuple = (32, 32, 3)
-        
+        observation_shape: tuple = (32, 32, 3),
+        message_dim: int = 8,
+        message_raw_dim: int = 8
     ):
         self.agent_count = agent_count
         self.num_env = num_env
@@ -43,11 +45,26 @@ class EnvironmentManager:
 
         if parallel:
             self.env = make_env_parallel(
-                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, not envision, seed, num_env=self.num_env, stack_frames=stack_frames, observation_shape=observation_shape
+                "smarts.env:hiway-v1",
+                agent_interfaces,
+                self.scenarios, not envision,
+                seed, num_env=self.num_env,
+                stack_frames=stack_frames, 
+                observation_shape=observation_shape,
+                message_dim=message_dim,
+                message_raw_dim=message_raw_dim
             )
         else:
             self.env = make_env(
-                "smarts.env:hiway-v1", agent_interfaces, self.scenarios, headless=not envision, seed=seed, stack_frames=stack_frames, observation_shape=observation_shape
+                "smarts.env:hiway-v1",
+                agent_interfaces,
+                self.scenarios,
+                headless=not envision,
+                seed=seed,
+                stack_frames=stack_frames,
+                observation_shape=observation_shape,
+                message_dim=message_dim,
+                message_raw_dim=message_raw_dim
             )
 
 
@@ -57,8 +74,8 @@ class EnvironmentManager:
         return self.env.reset()
 
 
-    def step(self, actions_batch: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Any:
-        return self.env.step(actions_batch)
+    def step(self, *args, **kwargs) -> Any:
+        return self.env.step(*args, **kwargs)
 
     def get_scenarios(self) -> List[str]:
         return self.scenarios

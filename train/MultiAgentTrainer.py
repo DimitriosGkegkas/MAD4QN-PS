@@ -73,6 +73,8 @@ class MultiAgentTrainerParallel:
             envision=config.envision,
             evaluate=config.evaluate,  # If True, use parallel environments for evaluation
             observation_shape=config.observation_shape,
+            message_dim=agent_config.message_dim,
+            message_raw_dim=agent_config.feature_dim + agent_config.action_dim + agent_config.direction_dim
         )
         agent_names = self.env_manager.get_agent_names()
         self.episode_manager = EpisodeManager(agent_names, parallel=config.parallel)

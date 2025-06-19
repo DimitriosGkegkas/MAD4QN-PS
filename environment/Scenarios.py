@@ -121,13 +121,6 @@ class Scenarios(gym.Wrapper):
 
     def set_scenario(self, scenario_index):
         self.evaluation_scenario = scenario_index
-        
-    def step(self, action, *args, **kwargs):
-        # I wanna format the action for each agent as a number and not a array fo a single element
-        action ={
-            agent: action[agent][0] for agent in action.keys()
-        }
-        return self.env.step(action, *args, **kwargs)
 
     def reset(self, seed=None):
         if self.evaluation_scenario >= 0:
@@ -137,4 +130,5 @@ class Scenarios(gym.Wrapper):
             scenario = np.random.choice(list(self._scenarios_iterator), p=self.scenarios_probs)
         return self.env.reset(seed = seed, options={"scenario": scenario})
 
-       
+    def step(self, *args, **kwargs) -> tuple:
+        return self.env.step(*args, **kwargs)

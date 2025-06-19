@@ -54,28 +54,19 @@ class Evaluator:
             self.agent_manager.save()
             self.best_score = mean_score
 
-        elapsed_time = datetime.now() - self.logger.start_time
-
         return mean_score, rewards_all
 
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
-        direction, communication, current_messages, current_raw_messages, current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
+        current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
         ep_steps = 0
         scores = [0.0 for _ in current_state]
-        
-        self.agent_manager.set_communication(communication)
-        self.agent_manager.set_direction(direction)
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
-            action, next_messages, _  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
+            action, next_messages, _  = self.agent_manager.action(current_state, terminate, truncated)
             
-            next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
+            current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
 
-            
-            current_state = next_state
-            current_messages = next_messages
             ep_steps += 1
-            
             scores = [sum(r.values()) + s for r, s in zip(reward, scores)]
 
         return scores
@@ -111,18 +102,13 @@ class Evaluator:
         
         
     def envision(self, scenario_id: int) -> None:
-        direction, communication, current_messages, current_raw_messages, current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_id)
+        self.agent_manager.eval()
+        current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_id)
         ep_steps = 0
-        self.agent_manager.set_communication(communication)
-        self.agent_manager.set_direction(direction)
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
-            action, next_messages, _  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
+            action, next_messages, _  = self.agent_manager.action(current_state, terminate, truncated)
             
-            next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
+            current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
 
-            
-            current_state = next_state
-            current_messages = next_messages
             ep_steps += 1
-

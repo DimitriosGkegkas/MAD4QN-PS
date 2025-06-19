@@ -142,9 +142,23 @@ class ParallelEnvWithScenario(object):
         """The environment's action space in gym representation."""
         return self._single_action_space
 
-    def _call(self, msg: _Message, payloads: Sequence[Any]) -> Sequence[Any]:
-        assert len(payloads) == self._num_envs
-        for pipe, payload in zip(self._parent_pipes, payloads):
+    def _call(self, msg: _Message, *payload_parts: Sequence[Any]) -> Sequence[Any]:
+        """
+        Sends messages to all environments with optional multiple payload components per env.
+
+        Args:
+            msg (_Message): The message type.
+            *payload_parts (Sequence[Any]): Sequences of per-env values (e.g., actions, messages).
+
+        Returns:
+            Sequence[Any]: Results from all environments.
+        """
+        # Ensure all parts are the same length
+        assert all(len(part) == self._num_envs for part in payload_parts), \
+            "All payload parts must match number of environments"
+
+        # Zip all parts into one per-env payload
+        for pipe, payload in zip(self._parent_pipes, zip(*payload_parts)):
             pipe.send((msg, payload))
 
         return self._recv()
@@ -232,7 +246,10 @@ class ParallelEnvWithScenario(object):
         return zip(*self._call(_Message.RESET, [None] * self._num_envs))
 
     def step(
-        self, actions: Sequence[Dict[str, Any]]
+        self, 
+        actions: Sequence[Dict[str, Any]],
+        message: Sequence[Dict[str, Any]] = None,
+        raw_message: Sequence[Dict[str, Any]] = None
     ) -> Tuple[
         Sequence[Dict[str, Any]],
         Sequence[Dict[str, float]],
@@ -249,7 +266,13 @@ class ParallelEnvWithScenario(object):
             Tuple[ Sequence[Dict[str, Any]], Sequence[Dict[str, float]], Sequence[Dict[str, bool]], Sequence[Dict[str, bool]], Sequence[Dict[str, Any]] ]:
                 A batch of (observations, rewards, terminateds, truncateds, infos) from the vectorized environment.
         """
-        result = self._call(_Message.STEP, actions)
+        if raw_message is not None:
+            payload = (actions, message, raw_message)
+        elif message is not None:
+            payload = (actions, message)
+        else:
+            payload = actions
+        result = self._call(_Message.STEP, *payload)
         observations, rewards, terminateds, truncateds, infos = zip(*result)
         return (observations, rewards, terminateds, truncateds, infos)
 
@@ -319,13 +342,13 @@ def _worker(
                 env_seed = env.seed
                 pipe.send((_Message.RESULT, env_seed))
             elif message == _Message.ACCESS:
-                result = getattr(env, payload, None)
+                result = getattr(env, *payload, None)
                 pipe.send((_Message.RESULT, result))
             elif message == _Message.RESET:
                 res = env.reset()
                 pipe.send((_Message.RESULT, res))
             elif message == _Message.STEP:
-                observation, reward, terminated, truncated, info = env.step(payload)
+                observation, reward, terminated, truncated, info = env.step(*payload)
                 # TODO at some point I can check if there are less than 4 cars and end the simulation (reset it) to move on if I want oto have async.
                 if terminated["__all__"] and auto_reset:
                     # Final observation can be obtained from `info` as follows:
@@ -338,10 +361,10 @@ def _worker(
                     )
                 )
             elif message == _Message.SCENARIO:
-                env.set_scenario(payload)
+                env.set_scenario(*payload)
                 pipe.send((_Message.RESULT, None))
             elif message == _Message.PROBS:
-                env.modify_probs(payload)
+                env.modify_probs(*payload)
                 pipe.send((_Message.RESULT, None))
             elif message == _Message.CLOSE:
                 break

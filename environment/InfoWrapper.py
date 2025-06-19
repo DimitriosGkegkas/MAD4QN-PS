@@ -15,15 +15,9 @@ class InfoWrapper(gym.Wrapper):
     def reset(self, **kwargs):
         observation, info = self.env.reset(**kwargs)
 
-        termination, truncation, reward, raw_message, message = self._create_dummy_reset_output()
-        directions = { agent: get_direction_vector_from_info(info[agent]) for agent in info.keys() if agent in self.agent_names }
-        communication_map = get_communication_map(info)
+        termination, truncation, reward = self._create_dummy_reset_output()
 
         return (
-            directions,
-            communication_map,
-            message,
-            raw_message,
             observation,
             termination,
             truncation,
@@ -41,8 +35,6 @@ class InfoWrapper(gym.Wrapper):
             {agent: False for agent in self.agent_names},   # termination
             {agent: False for agent in self.agent_names},   # truncation
             {agent: 0 for agent in self.agent_names},       # reward
-            {agent: None for agent in self.agent_names},    # raw_message
-            {agent: None for agent in self.agent_names},    # message
         )
         
     def add_time_separation(self, info):
@@ -53,52 +45,6 @@ class InfoWrapper(gym.Wrapper):
         return info
         
     
-
-
-    
-
-def get_direction_vector(mission):
-    start = position_to_road([mission.start.position.x, mission.start.position.y])
-    goal = position_to_road([mission.goal.position.x, mission.goal.position.y])
-    roads = start + goal
-    return roads_to_direction[roads]
-
-
-def get_direction_vector_from_info(info):
-    if 'env_obs' in info:
-        ego = info['env_obs'].ego_vehicle_state
-        return get_direction_vector(ego.mission)
-    elif 'mission' in info:
-        return get_direction_vector(info['mission'])
-    else:
-        raise Exception("No mission or env_obs found in info")
-
-def get_communication_map(info: dict) -> dict:
-    # Step 1: Build a mapping from agent to their start road
-    agent_start_roads = {}
-    for agent, agent_info in info.items():
-        if 'env_obs' in agent_info:
-            start_pos = agent_info['env_obs'][5].mission.start.position
-        elif 'mission' in agent_info:
-            start_pos = agent_info['mission'].start.position
-        else:
-            continue  # Skip agents with no mission info
-
-        start_road = position_to_road([start_pos.x, start_pos.y])
-        agent_start_roads[agent] = start_road
-
-    # Step 2: Build communication map
-    communication_map = {}
-    for agent, start_road in agent_start_roads.items():
-        connected_roads = road_to_communication[start_road]
-        # Find agents whose start road is in the connected roads list
-        communication_map[agent] = [
-            other_agent
-            for other_agent, other_start in agent_start_roads.items()
-            if other_agent != agent and other_start in connected_roads
-        ]
-
-    return communication_map
 
 
 

@@ -3,6 +3,7 @@ import numpy as np
 
 from train.AgentManager import AgentManager
 from train.BaseTrainer import BaseTrainer
+from train.EnvironmentManager import EnvironmentManager
 from train.EpisodeManager import EpisodeManager
 from train.Evaluator import Evaluator
 
@@ -13,7 +14,7 @@ class Trainer:
         agent_manager: AgentManager,   # AgentManager instance
         episode_manager: EpisodeManager,  # ScenarioManager instance
         evaluator: Evaluator,       # Evaluator instance
-        env_manager,     # EnvironmentManager instance
+        env_manager: EnvironmentManager,     # EnvironmentManager instance
         total_steps: int,
         agent_count: int,
         algorithm_identifier: str,
@@ -41,24 +42,19 @@ class Trainer:
 
     def _episode_train(self) -> None:
         self.agent_manager.train()
-        direction, communication, current_messages, current_raw_messages, current_state, terminate, truncated, reward, infos = self.env_manager.reset()
+        current_state, terminate, truncated, reward, infos = self.env_manager.reset()
         ep_steps = 0
         scores = [0.0 for _ in current_state]
-        
-        self.agent_manager.set_communication(communication)
-        self.agent_manager.set_direction(direction)
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_training_steps:
-            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, current_messages, terminate, truncated)
+            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, terminate, truncated)
             
-            next_state, reward, terminate, truncated, infos = self.env_manager.step(action)
+            next_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages, next_raw_messages)
 
-            self.agent_manager.store_transitions(current_state, current_raw_messages, action, reward, next_state, next_raw_messages, terminate, truncated)
+            self.agent_manager.store_transitions(current_state, action, reward, next_state, terminate, truncated)
             self.agent_manager.update_agent(step=self.n_steps)
             
             current_state = next_state
-            current_messages = next_messages
-            current_raw_messages = next_raw_messages
             self.n_steps += 1
             ep_steps += 1
             

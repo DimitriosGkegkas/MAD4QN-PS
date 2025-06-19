@@ -15,10 +15,11 @@ class StackFrames(gym.ObservationWrapper):
                       collections.deque(maxlen=repeat), collections.deque(maxlen=repeat)]
         self.agent_names = agent_names
 
-    def step(self, action):
+    def step(self, *args, **kwargs) -> tuple:
         """Modifies the :attr:`env` after calling :meth:`step` using :meth:`self.observation` on the returned observations."""
-        observation, reward, terminated, truncated, info = self.env.step(action)
+        observation, reward, terminated, truncated, info = self.env.step(*args, **kwargs)
         return self.observation(observation), reward, terminated, truncated, info
+    
     def reset(self,
         *,
         seed = None,
@@ -29,7 +30,7 @@ class StackFrames(gym.ObservationWrapper):
         self.stack[2].clear()
         self.stack[3].clear()
 
-        turning_intentions, communication_map, msg, raw_msg, observation, termination, truncation, reward, infos = self.env.reset(seed=seed, options=options)
+        observation, termination, truncation, reward, infos = self.env.reset(seed=seed, options=options)
         for i, j in enumerate(self.agent_names):
             for _ in range(self.stack[i].maxlen):
                 self.stack[i].append(observation[j])
@@ -38,7 +39,7 @@ class StackFrames(gym.ObservationWrapper):
         for i, j in enumerate(self.agent_names):
             obs_dict[j] = np.array(self.stack[i]).reshape(self.observation_space.low.shape)
         
-        return turning_intentions, communication_map, msg, raw_msg, self.observation(observation), termination, truncation, reward, infos
+        return self.observation(observation), termination, truncation, reward, infos
 
     def observation(self, observation):
         obs_dict = {}
