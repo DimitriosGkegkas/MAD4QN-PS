@@ -6,7 +6,7 @@ if __name__ == '__main__':
     config = TrainerConfig(
         algorithm_identifier="SAC3",
         num_env=9,
-        evaluation_step=10,
+        evaluation_step=1,
         max_training_steps=400, # Maximum steps per episode, can be adjusted based on the environment
         max_evaluation_steps=200,
         agent_count=4,

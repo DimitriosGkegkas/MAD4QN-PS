@@ -41,8 +41,9 @@ class Evaluator:
         for i, scenario_ids in enumerate(self.logger.slice_list(self.eval_scenarios, self.env_manager.num_env)):
             
             if len(scenario_ids) < self.env_manager.num_env:
+                print(f"Skipping evaluation for scenario batch {i}, {scenario_ids} due to insufficient scenarios: {len(scenario_ids)} < {self.env_manager.num_env}")
                 continue  # Skip if not enough scenarios for the number of environments
-            
+            print(f"Evaluating scenario batch {i}: {scenario_ids} at step {self.evaluate_step} with {len(scenario_ids)} scenarios")
             scores = self._episode_eval(scenario_ids)
             rewards_all.extend(scores)
             self.logger.log_percentage(len(rewards_all) / len(self.eval_scenarios))

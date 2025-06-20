@@ -453,7 +453,29 @@ class Agent:
         soft_update(self.critic_target, self.critic, self.tau)
         soft_update(self.embedded_target, self.embedded, self.tau)
             
-    
+    def get_agent_noise(self, agent: str, action_dim: int) -> torch.Tensor:
+        """
+        Get or update the noise vector for a given agent.
+
+        Args:
+            agent (str): The agent's identifier.
+            action_dim (int): Dimension of the action space.
+
+        Returns:
+            torch.Tensor: Noise vector for sampling.
+        """
+        if agent not in self.agent_noise_states:
+            self.agent_noise_states[agent] = {
+                "z": torch.zeros(action_dim),
+                "counter": 0
+            }
+
+        noise_state = self.agent_noise_states[agent]
+        if noise_state["counter"] % self.chunk_interval == 0:
+            noise_state["z"] = torch.randn(action_dim)
+        noise_state["counter"] += 1
+
+        return noise_state["z"]
     
     def choose_action(self, state: np.ndarray, direction: np.ndarray, messages: np.ndarray, agent: str = None, evaluate: bool = False):
         """
@@ -487,18 +509,7 @@ class Agent:
                 action = dist.mean
             else:
                 action_dim = dist.loc.shape[-1]
-                if agent not in self.agent_noise_states:
-                    self.agent_noise_states[agent] = {
-                        "z": torch.zeros(action_dim),
-                        "counter": 0
-                    }
-
-                noise_state = self.agent_noise_states[agent]
-                if noise_state["counter"] % self.chunk_interval == 0:
-                    noise_state["z"] = torch.randn(action_dim)
-                noise_state["counter"] += 1
-
-                z = noise_state["z"].to(dist.loc.device)
+                z = self.get_agent_noise(agent, action_dim).to(dist.loc.device)
                 action = dist.sample(z=z)
 
             action = action.clamp(-1 , 1)

@@ -52,10 +52,10 @@ class AgentManager:
     ) -> Tuple[List[Dict[str, np.ndarray]], List[Dict[str, np.ndarray]], List[Dict[str, np.ndarray]]]:
 
         batch_actions, batch_new_messages, batch_raw_inputs = [], [], []
-        for  obs, term, trunc in zip(
+        for  index, (obs, term, trunc) in enumerate(zip(
           state, terminate, truncated
-        ):
-            actions, next_messages, next_raw_messages = self.select_actions(obs, term, trunc)
+        )):
+            actions, next_messages, next_raw_messages = self.select_actions(obs, term, trunc, index)
             batch_actions.append(actions)
             batch_new_messages.append(next_messages)
             batch_raw_inputs.append(next_raw_messages)
@@ -67,7 +67,8 @@ class AgentManager:
         self,
         observations: Dict[str, ObservationType],
         terminated: Dict[str, bool],
-        truncated: Dict[str, bool]
+        truncated: Dict[str, bool],
+        env_index: int = 0
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray], Dict[str, np.ndarray]]:
         actions, new_messages, raw_inputs = {}, {}, {}
         for agent in observations:
@@ -78,7 +79,7 @@ class AgentManager:
                 observations[agent][0], 
                 observations[agent][1], 
                 observations[agent][2], 
-                agent, 
+                agent + str(env_index), 
                 self.evaluate
                 )
             
