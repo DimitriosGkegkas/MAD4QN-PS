@@ -57,7 +57,7 @@ class Evaluator:
 
         return
 
-    def _average_rewards(reward_batch: List[Dict]) -> List[float]:
+    def _average_rewards(self, reward_batch: List[Dict]) -> List[float]:
         return [np.mean(list(r.values())) if r else 0.0 for r in reward_batch]
 
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
