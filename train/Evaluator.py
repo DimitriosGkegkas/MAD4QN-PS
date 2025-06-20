@@ -41,9 +41,7 @@ class Evaluator:
         for i, scenario_ids in enumerate(self.logger.slice_list(self.eval_scenarios, self.env_manager.num_env)):
             
             if len(scenario_ids) < self.env_manager.num_env:
-                print(f"Skipping evaluation for scenario batch {i}, {scenario_ids} due to insufficient scenarios: {len(scenario_ids)} < {self.env_manager.num_env}")
                 continue  # Skip if not enough scenarios for the number of environments
-            print(f"Evaluating scenario batch {i}: {scenario_ids} at step {self.evaluate_step} with {len(scenario_ids)} scenarios")
             scores = self._episode_eval(scenario_ids)
             rewards_all.extend(scores)
             self.logger.log_percentage(len(rewards_all) / len(self.eval_scenarios))
@@ -59,21 +57,24 @@ class Evaluator:
 
         return
 
+    def _average_rewards(reward_batch: List[Dict]) -> List[float]:
+        return [np.mean(list(r.values())) if r else 0.0 for r in reward_batch]
+
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
         current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
-            action, next_messages, _  = self.agent_manager.action(current_state, terminate, truncated)
-            
+            action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
             current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
-
             ep_steps += 1
-            avg_rewards = [np.mean(list(r.values())) for r in reward if len(list(r.values())) > 0]
+
+            avg_rewards = self._average_rewards(reward)
             scores = [s + r for s, r in zip(scores, avg_rewards)]
 
         return scores
+
 
 
     # def collect_statistics(self, collector: ExperimentDataCollector, parallel: bool = True) -> List[float]:
