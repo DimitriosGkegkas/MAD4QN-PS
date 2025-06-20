@@ -388,7 +388,7 @@ class Agent:
         logger.log_scalar("loss/actor", actor_loss.item(), self.updates)
         regularization_loss = torch.mean(torch.clamp(torch.abs(mu) - 1.0, min=0.0) ** 2)
         logger.log_scalar("policy/regularization", regularization_loss.item(), self.updates)
-        # logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
+        logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
         
         
 

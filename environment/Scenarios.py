@@ -22,14 +22,15 @@ class Scenarios(gym.Wrapper):
     def _sample_scenario_index(self):
         agent_count = 1
         
-        if self.n_episodes > 10:
+        if self.n_episodes < 10:
             agent_count = 1
-        elif self.n_episodes > 30:
+        elif self.n_episodes < 50:
             agent_count = 2
-        elif self.n_episodes > 70:
+        elif self.n_episodes < 150:
             agent_count = 3
-        elif self.n_episodes > 150:
+        else:
             agent_count = 4
+            
         scenario_id = random.choice(scenarios_per_number_of_agents[agent_count])
         print(f"Scenario {scenario_id} selected for episode {self.n_episodes}")
         return scenario_id
