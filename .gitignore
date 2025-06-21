@@ -26,6 +26,7 @@ wheels/
 MANIFEST
 sanity_test_result.xml
 pip-wheel-metadata/
+**/*.pth
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -1,7 +1,5 @@
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 import numpy as np
-from datetime import datetime
-from statistics.experiment_data_collector import ExperimentDataCollector
 from train.AgentManager import AgentManager
 from train.BaseTrainer import BaseTrainer
 from train.EnvironmentManager import EnvironmentManager
@@ -74,36 +72,6 @@ class Evaluator:
             scores = [s + r for s, r in zip(scores, avg_rewards)]
 
         return scores
-
-
-
-    # def collect_statistics(self, collector: ExperimentDataCollector, parallel: bool = True) -> List[float]:
-    #     all_scores = []
-    #     if parallel:
-    #         for ids in self.logger.slice_list(list(range(self.total_scenarios)), self.env.num_env):
-    #             scores = self._full_eval_batch(ids, collector)
-    #             all_scores.extend(scores)
-    #     else:
-    #         for i in range(self.total_scenarios):
-    #             self._full_eval_single(i, collector)
-    #     collector.save_raw_data()
-    #     return all_scores
-
-    # def _full_eval_batch(self, ids: List[int], collector: ExperimentDataCollector) -> List[float]:
-    #     obs_batch, infos = self.env.reset(ids)
-    #     turning_ints = self.episode.get_batch_turning_intentions(infos)
-    #     collector.start_new_scenarios(ids, turning_ints)
-    #     ...
-    #     # Same loop as in _eval_batch, but calls collector.record_agent_data()
-    #     ...
-
-    # def _full_eval_single(self, id: int, collector: ExperimentDataCollector) -> None:
-    #     obs, infos = self.env.reset_single(id)
-    #     turning_int = self.episode.get_turning_intention(infos)
-    #     collector.start_new_scenarios([id], [turning_int])
-    #     ...
-    #     # Single-agent eval loop with collector logic
-    #     ...
         
         
     def envision(self, scenario_id: int) -> None:

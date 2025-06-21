@@ -13,13 +13,12 @@ class BaseTrainer:
         self.start_time = datetime.now()
 
         self.run_name = os.path.join(algorithm_identifier, self.start_time.strftime("%d%m%Y_%H%M%S"))
-        self.training_stats_path = None if evaluate else f"training_stats/{self.run_name}"
         
         self.scenario_count = 0
 
         self.writer: Optional[SummaryWriter] = None
-        if self.training_stats_path is not None and enable_tensorboard:
-            tensorboard_path = os.path.join("training_stats", "tensorboard", self.run_name)
+        if not evaluate and enable_tensorboard:
+            tensorboard_path = os.path.join("data", "tensorboard", self.run_name)
             os.makedirs(tensorboard_path, exist_ok=True)
             self.writer = SummaryWriter(tensorboard_path)
 

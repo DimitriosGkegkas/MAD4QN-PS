@@ -1,4 +1,4 @@
-from Agent.agent import AgentConfig
+from agent import AgentConfig
 from train.MultiAgentTrainer import MultiAgentTrainerParallel, TrainerConfig
 
 

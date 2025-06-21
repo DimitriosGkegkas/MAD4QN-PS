@@ -1,17 +1,11 @@
-from math import gamma
 from typing import Any, List
-from datetime import datetime
-import numpy as np
-from py import log
-from Agent.agent import AgentConfig
+from agent import AgentConfig
 from train.BaseTrainer import BaseTrainer
 from train.AgentManager import AgentManager
 from train.EnvironmentManager import EnvironmentManager
 from train.Evaluator import Evaluator
 from train.EpisodeManager import EpisodeManager
 from train.Trainer import Trainer
-from train.StatisticsCollector import StatisticsCollector
-from statistics.experiment_data_collector import ExperimentDataCollector
 from dataclasses import dataclass
 from smarts.core.agent_interface import AgentInterface
 from smarts.zoo.agent_spec import AgentSpec
@@ -147,6 +141,9 @@ class MultiAgentTrainerParallel:
         
     def train(self) -> None:
         self.trainer.train()
+        
+    # def evaluate(self) -> None:
+    #     self.evaluator.full_evaluation()
         
     
     # def collect_statistics(self, parallel: bool = True) -> None:

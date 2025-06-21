@@ -2,7 +2,7 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 import os
 import numpy as np
 import torch
-from Agent import Agent, agent
+from agent import Agent, agent
 from dataclasses import dataclass
 
 from energy import config
