@@ -34,7 +34,7 @@ class EpisodeManager:
         Determines if a single episode is done based on reward signals,
         observation presence, termination flags, and custom info flags.
         """
-        return self._crashed(truncated) or self._is_episode_terminated(observations, terminated, info)
+        return self._is_episode_terminated(observations, terminated, info)
 
     def is_batch_episode_done(
         self,
