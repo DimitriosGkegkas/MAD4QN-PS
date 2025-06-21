@@ -1,4 +1,3 @@
-from evaluation.experiment_data_collector import ExperimentDataCollector
 from evaluation.statistics_plotter import StatisticsPlotter
 import random
 

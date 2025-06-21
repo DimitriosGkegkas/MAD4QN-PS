@@ -1,4 +1,4 @@
-from evaluation.electric_vehicle_energy_model import ElectricVehicleEnergyModel
+from evaluation.energy import ElectricVehicleEnergyModel
 import os
 import numpy as np
 from datetime import datetime
@@ -14,27 +14,13 @@ class ExperimentDataCollector:
         self.current_scenarios = {}  # Store current scenario data
         self.algorithm_identifier = algorithm_identifier
 
-    # def add_agent(self, agent_id, agent_type, scenario_id):
-
-    def start_new_scenarios(self, scenario_ids, batch_agents_with_types):
-        """
-        Start a new scenario and initialize agents with their types.
-        :param batch_agents_with_types: Dictionary mapping agent_id to agent_type.
-        """
-
-        # Initialize each agent with type and state
-        for scenario_id, agents_with_types in zip(scenario_ids, batch_agents_with_types):
-            for agent_id, agent_type in agents_with_types.items():
-                self.add_agent(agent_id, agent_type, scenario_id)
-
-    def add_agent(self, agent_id, agent_type, scenario_id):
+    def add_agent(self, agent_id, scenario_id):
         if scenario_id not in self.current_scenarios:
             self.current_scenarios[scenario_id] = {
             }
 
         if agent_id not in self.current_scenarios[scenario_id]:
             self.current_scenarios[scenario_id][agent_id] = {
-                "type": agent_type,
                 "distance": [],
                 "speeds": [],
                 "accelerations": [],
@@ -60,11 +46,12 @@ class ExperimentDataCollector:
         :param travel_distance: Distance traveled during this step
         :param is_waiting: Boolean indicating whether the agent is waiting
         """
+        self.add_agent(agent_id, scenario_id)
         if self.current_scenarios is None:
             raise ValueError("No active scenario. Start a new scenario first.")
-        
         assert scenario_id is not None, "Scenario id must be provided"
         assert self.current_scenarios[scenario_id] is not None, "Scenario id must be valid"
+        assert self.current_scenarios[scenario_id][agent_id] is not None, "Agent id must be valid"
 
         # Update agent's data
         agent_data = self.current_scenarios[scenario_id][agent_id]
@@ -103,10 +90,8 @@ class ExperimentDataCollector:
 
         self.current_scenarios[scenario_id][agent_id]["state"] = state
         
-    def close_scenario(self):
+    def reset(self):
         """Close the current scenario"""
-        if self.current_scenarios is None:
-            raise ValueError("No active scenario to close.")
         for current_scenario in self.current_scenarios.values():
             self.scenarios.append(current_scenario)
         self.current_scenarios = {}
@@ -250,7 +235,7 @@ class ExperimentDataCollector:
         return total / count if count > 0 else 0
     
 
-    def save_raw_data(self, base_dir = "data/raw"):
+    def save_data(self, base_dir = "data/raw"):
         """
         Save raw data for all scenarios and agents to files in a structured directory format.
         """

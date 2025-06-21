@@ -30,8 +30,6 @@ class StatisticsCollector:
             scores = self._episode_eval(scenario_ids)
             rewards_all.extend(scores)
             self.logger.log_percentage(len(rewards_all) / len(self.eval_scenarios))
-            
-        self.logger.after_evaluation(rewards_all, self.eval_scenarios[:len(rewards_all)], n_episodes, n_steps)
         return
 
     def _average_rewards(self, reward_batch: List[Dict]) -> List[float]:
@@ -39,32 +37,39 @@ class StatisticsCollector:
 
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
         current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
+        self.collector.reset()
+        self.extract_scenario_data_batch(scenario_ids, current_state, infos)
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
             current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
-            self.extract_scenario_data_batch(scenario_ids, current_state, infos, self.collector)
+            self.extract_scenario_data_batch(scenario_ids, current_state, infos)
             ep_steps += 1
 
             avg_rewards = self._average_rewards(reward)
             scores = [s + r for s, r in zip(scores, avg_rewards)]
-
         return scores
     
+
+    def extract_scenario_data_batch(
+        self,
+        scenario_ids: List[int],
+        observations_batch: List[Dict[str, Any]],
+        infos_batch: List[Dict[str, Any]],
+    ) -> None:
+        for sid, obs, info in zip(scenario_ids, observations_batch, infos_batch):
+            self.extract_scenario_data(sid, obs, info)
+            
 
     def extract_scenario_data(
         self,
         scenario_id: int,
         observations: Dict[str, Any],
-        infos: Dict[str, Any],
-        collector: ExperimentDataCollector
+        infos: Dict[str, Any]
     ) -> None:
-        for agent_id in self.agent_names:
-            if agent_id not in observations:
-                continue
-
+        for agent_id in observations:
             ego_state = infos[agent_id]['env_obs'].ego_vehicle_state
             speed = np.linalg.norm(ego_state.linear_velocity)
             jerk = np.linalg.norm(ego_state.linear_jerk)
@@ -73,7 +78,7 @@ class StatisticsCollector:
                 ego_state.linear_acceleration
             )
 
-            collector.record_agent_data(
+            self.collector.record_agent_data(
                 agent_id,
                 speed=speed,
                 acceleration=acc,
@@ -85,11 +90,15 @@ class StatisticsCollector:
                 scenario_id=scenario_id,
             )
 
-            if infos[agent_id]['env_obs'].events.collisions:
-                collector.mark_agent_crashed(agent_id, scenario_id)
+            if infos[agent_id]['env_obs'].events.collisions or \
+                infos[agent_id]['env_obs'].events.off_road or \
+                infos[agent_id]['env_obs'].events.off_route or \
+                infos[agent_id]['env_obs'].events.on_shoulder or \
+                infos[agent_id]['env_obs'].events.wrong_way:
+                self.collector.mark_agent_crashed(agent_id, scenario_id)
 
             if infos[agent_id]['env_obs'].events.reached_goal:
-                collector.mark_agent_succeeded(agent_id, scenario_id)
+                self.collector.mark_agent_succeeded(agent_id, scenario_id)
 
         for social in infos.get("social_traffic", []):
             speed = np.linalg.norm(social["linear_velocity"])
@@ -99,7 +108,7 @@ class StatisticsCollector:
             )
             jerk = np.linalg.norm(social["linear_jerk"])
 
-            collector.record_agent_data(
+            self.collector.record_agent_data(
                 agent_id=social["id"],
                 speed=speed,
                 acceleration=acc,
@@ -110,17 +119,8 @@ class StatisticsCollector:
                 is_waiting=(speed < 0.1),
                 scenario_id=scenario_id,
             )
-            collector.add_social_vehicle(social["id"], scenario_id)
+            self.collector.add_social_vehicle(social["id"], scenario_id)
 
-    def extract_scenario_data_batch(
-        self,
-        scenario_ids: List[int],
-        observations_batch: List[Dict[str, Any]],
-        infos_batch: List[Dict[str, Any]],
-        collector: ExperimentDataCollector
-    ) -> None:
-        for sid, obs, info in zip(scenario_ids, observations_batch, infos_batch):
-            self.extract_scenario_data(sid, obs, info, collector)
 
 
     def get_directional_acceleration(

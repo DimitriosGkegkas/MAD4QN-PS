@@ -12,7 +12,7 @@ class EnvironmentManager:
         self,
         agent_count: int,
         agent_spec: Any,  # Define a custom type for agent_spec if possible
-        scenario_subdir: str = "scenarios/sumo/multi_scenario",
+        scenario_subdir: str = "environment/scenarios/multi_scenario",
         parallel: bool = True,
         evaluate: bool = False,
         envision: bool = False,
