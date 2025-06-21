@@ -7,10 +7,10 @@ if __name__ == "__main__":
   
 
     algorithms = [
-        "ATL1",
-        "ATL2",
-        "FTTL1",
-        "FTTL2",
+        # "ATL1",
+        # "ATL2",
+        # "FTTL1",
+        # "FTTL2",
         "FTTLOPT",
         "Centralized",
         # "keepLane",
@@ -18,7 +18,8 @@ if __name__ == "__main__":
         #     "DuelingDDQNAgentsNoParaller",
         #     "DuelingDDQNAgentsNoRandomLR",
         "MAD4QN-v1",
-        "MAD4QN"
+        "MAD4QN",
+        "SAC3",
         # # "mad4qn",
         # "DropOutLayer2",
         # "DropOutLayer2-v1",

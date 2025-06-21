@@ -4,24 +4,25 @@ from evaluation.experiment_data_collector import ExperimentDataCollector
 from train import AgentManager, EnvironmentManager, EpisodeManager, BaseTrainer
 
 class StatisticsCollector:
-    def __init__(self, agent_names: List[str],
+    def __init__(self,
         trainer_logger: BaseTrainer,  # BaseTrainer instance
         agent_manager: AgentManager,   # AgentManager instance
         episode_manager: EpisodeManager,  # ScenarioManager instance
         env_manager: EnvironmentManager,     # EnvironmentManager instance
-        evaluation_step: int,
+        max_evaluation_steps: int,
         eval_scenarios: List[int],
+        algorithm_identifier: str,
     ):
         self.logger = trainer_logger
         self.agent_manager = agent_manager
         self.episode_manager = episode_manager
         self.env_manager = env_manager
-        self.evaluation_step = evaluation_step
+        self.max_evaluation_steps = max_evaluation_steps
         self.best_score = -np.inf
         self.eval_scenarios = eval_scenarios
-        self.collector = ExperimentDataCollector()
+        self.collector = ExperimentDataCollector(algorithm_identifier)
 
-    def evaluate(self, n_episodes: int, n_steps: int) -> None:
+    def evaluate(self) -> None:
         self.agent_manager.eval()
         rewards_all: List[float] = []
         self.logger.log_percentage(0.0)
@@ -30,6 +31,8 @@ class StatisticsCollector:
             scores = self._episode_eval(scenario_ids)
             rewards_all.extend(scores)
             self.logger.log_percentage(len(rewards_all) / len(self.eval_scenarios))
+        print()
+        self.collector.save_data()
         return
 
     def _average_rewards(self, reward_batch: List[Dict]) -> List[float]:
@@ -37,19 +40,19 @@ class StatisticsCollector:
 
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
         current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
-        self.collector.reset()
-        self.extract_scenario_data_batch(scenario_ids, current_state, infos)
+        self.extract_scenario_data_batch(scenario_ids, current_state, infos, reward)
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
         while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
             current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
-            self.extract_scenario_data_batch(scenario_ids, current_state, infos)
+            self.extract_scenario_data_batch(scenario_ids, current_state, infos, reward)
             ep_steps += 1
 
             avg_rewards = self._average_rewards(reward)
             scores = [s + r for s, r in zip(scores, avg_rewards)]
+        self.collector.reset()
         return scores
     
 
@@ -58,16 +61,18 @@ class StatisticsCollector:
         scenario_ids: List[int],
         observations_batch: List[Dict[str, Any]],
         infos_batch: List[Dict[str, Any]],
+        reward_batch: List[Dict[str, Any]]
     ) -> None:
-        for sid, obs, info in zip(scenario_ids, observations_batch, infos_batch):
-            self.extract_scenario_data(sid, obs, info)
+        for sid, obs, info, reward in zip(scenario_ids, observations_batch, infos_batch, reward_batch):
+            self.extract_scenario_data(sid, obs, info, reward)
             
 
     def extract_scenario_data(
         self,
         scenario_id: int,
         observations: Dict[str, Any],
-        infos: Dict[str, Any]
+        infos: Dict[str, Any],
+        reward: Dict[str, Any] = None
     ) -> None:
         for agent_id in observations:
             ego_state = infos[agent_id]['env_obs'].ego_vehicle_state
@@ -85,9 +90,10 @@ class StatisticsCollector:
                 jerk=jerk,
                 dt=infos[agent_id]['env_obs'].dt,
                 travel_distance=infos[agent_id]['env_obs'].distance_travelled,
-                time_separation=infos[agent_id]['time_separation'],
+                time_separation=infos[agent_id]['time_separation'] if 'time_separation' in infos[agent_id] else 0.0,
                 is_waiting=(speed < 0.1),
                 scenario_id=scenario_id,
+                reward=reward[agent_id] if reward is not None else 0.0,
             )
 
             if infos[agent_id]['env_obs'].events.collisions or \
@@ -97,8 +103,8 @@ class StatisticsCollector:
                 infos[agent_id]['env_obs'].events.wrong_way:
                 self.collector.mark_agent_crashed(agent_id, scenario_id)
 
-            if infos[agent_id]['env_obs'].events.reached_goal:
-                self.collector.mark_agent_succeeded(agent_id, scenario_id)
+            # if infos[agent_id]['env_obs'].events.reached_goal:
+            self.collector.mark_agent_succeeded(agent_id, scenario_id)
 
         for social in infos.get("social_traffic", []):
             speed = np.linalg.norm(social["linear_velocity"])
@@ -115,7 +121,7 @@ class StatisticsCollector:
                 jerk=jerk,
                 dt=social["dt"],
                 travel_distance=social["travel_distance"],
-                time_separation=social["time_separation"],
+                time_separation=social["time_separation"] if "time_separation" in social else 0.0,
                 is_waiting=(speed < 0.1),
                 scenario_id=scenario_id,
             )

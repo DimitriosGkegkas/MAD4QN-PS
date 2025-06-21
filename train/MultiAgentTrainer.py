@@ -5,6 +5,7 @@ from train.AgentManager import AgentManager
 from train.EnvironmentManager import EnvironmentManager
 from train.Evaluator import Evaluator
 from train.EpisodeManager import EpisodeManager
+from train.StatisticsCollector import StatisticsCollector
 from train.Trainer import Trainer
 from dataclasses import dataclass
 from smarts.core.agent_interface import AgentInterface
@@ -58,7 +59,7 @@ class TrainerConfig:
     observation_shape: tuple = (256, 256, 3)  # Shape of the observation space, can be adjusted based on the environment
     
     # Scenarios
-    scenario_subdir: str = "scenarios/sumo/multi_scenario"
+    scenario_subdir: str = "environment/scenarios/multi_scenario"
     
     # Logging and Evaluation
     evaluate: bool = False
@@ -67,13 +68,13 @@ class TrainerConfig:
     parallel: bool = True  # If True, use parallel environments for training
     
 
-class MultiAgentTrainerParallel:
+class MultiAgentTrainer:
     def __init__(
         self,
         config: TrainerConfig,
         agent_config: AgentConfig
     ):
-        self.evaluate = config.evaluate
+        self.eval = config.evaluate
         
         self.logger = BaseTrainer( 
                     algorithm_identifier = config.algorithm_identifier, 
@@ -120,6 +121,16 @@ class MultiAgentTrainerParallel:
             eval_scenarios=config.eval_scenarios
         )
         
+        self.statistics = StatisticsCollector(
+            trainer_logger=self.logger,
+            agent_manager=self.agent_manager,
+            episode_manager=self.episode_manager,
+            env_manager=self.env_manager,
+            max_evaluation_steps=config.max_evaluation_steps,
+            eval_scenarios=config.eval_scenarios,
+            algorithm_identifier = config.algorithm_identifier,
+        )
+        
         self.trainer = Trainer(
             trainer_logger=self.logger,
             agent_manager=self.agent_manager,
@@ -134,7 +145,7 @@ class MultiAgentTrainerParallel:
         )      
 
     def preload(self, path: str) -> None:
-        self.agent_manager.load(path, evaluate=self.evaluate)
+        self.agent_manager.load(path, evaluate=self.eval)
         
     def envision(self, scenario_id: int ) -> None:
         self.evaluator.envision(scenario_id)
@@ -142,8 +153,8 @@ class MultiAgentTrainerParallel:
     def train(self) -> None:
         self.trainer.train()
         
-    # def evaluate(self) -> None:
-    #     self.evaluator.full_evaluation()
+    def evaluate(self) -> None:
+        self.statistics.evaluate()
         
     
     # def collect_statistics(self, parallel: bool = True) -> None:

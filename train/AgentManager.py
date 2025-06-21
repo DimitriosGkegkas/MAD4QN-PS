@@ -1,12 +1,8 @@
 from typing import Dict, List, Any, Optional, Tuple, Union
-import os
 import numpy as np
-import torch
-from agent import Agent, agent
-from dataclasses import dataclass
+from agent import Agent, AgentConfig
 
-from energy import config
-from train.BaseTrainer import BaseTrainer
+from .BaseTrainer import BaseTrainer
 
 from environment.types import ObservationType
 
@@ -15,7 +11,7 @@ class AgentManager:
     def __init__(
         self,
         agent_names: List[str],
-        agent_config: agent.AgentConfig,
+        agent_config: AgentConfig,
         logger: BaseTrainer,
         evaluate: bool = False,
         parallel: bool = True

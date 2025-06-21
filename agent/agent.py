@@ -10,13 +10,13 @@ import matplotlib.gridspec as gridspec
 import torch.nn.functional as F
 from torch.optim import Adam
 from zmq import device
-from agent.utils import soft_update, hard_update
-from train.BaseTrainer import BaseTrainer
+from .utils import soft_update, hard_update
+# from train.BaseTrainer import BaseTrainer
 from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder, MessageDecoder
 import numpy as np
 import re
 
-from agent.replay_memory import ReplayMemory
+from .replay_memory import ReplayMemory
 from  GPUtil import getAvailable
 
 from dataclasses import dataclass
@@ -332,7 +332,7 @@ class Agent:
         state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
         message_batch: List[List[torch.Tensor]],
-        logger: Optional[BaseTrainer] = None
+        logger: Optional[Any] = None
     ):    
         with torch.no_grad():
             # === Embed current state ===

@@ -6,6 +6,7 @@ from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from environment.help_scenario import all_scenarios_to_number_of_agents
 from collections import defaultdict
+
 class BaseTrainer:
     def __init__(self, algorithm_identifier: str, enable_tensorboard: bool = True, evaluate: bool = False):
         self.scores_list: List[Tuple[float, str, int]] = []
