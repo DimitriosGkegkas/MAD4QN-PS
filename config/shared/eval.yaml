@@ -1,0 +1,9 @@
+parallel: true
+evaluate: true
+tensorboard: false
+envision: false
+seed: 42
+eval_scenarios: [
+                  # Length 1 (4)
+                  0, 2, 5, 8,
+                ]

@@ -1,70 +1,75 @@
 from email import message
 from typing import Optional, List, Dict, Any, Union
+from omegaconf import DictConfig
 import torch
 import pathlib
 import numpy as np
 from environment import make_env, make_env_parallel
-
+from smarts.core.agent_interface import AgentInterface
+from smarts.zoo.agent_spec import AgentSpec
+from smarts.core.controllers import ActionSpaceType
 
 
 class EnvironmentManager:
     def __init__(
         self,
-        agent_count: int,
-        agent_spec: Any,  # Define a custom type for agent_spec if possible
-        scenario_subdir: str,
-        parallel: bool = True,
-        evaluate: bool = False,
-        envision: bool = False,
-        num_env: int = 1,
-        seed: int = 42,
-        stack_frames: int = 4,
-        observation_shape: tuple = (32, 32, 3),
-        message_dim: int = 8,
-        message_raw_dim: int = 8
+        cfg: DictConfig,
     ):
-        self.agent_count = agent_count
-        self.num_env = num_env
-        self.scenario_subdir = scenario_subdir
+        self.agent_count = cfg.agent_count
+        self.num_env = cfg.num_env
+        self.scenario_subdir = cfg.scenario_subdir
 
         self.agent_names: List[str] = [f"Agent-{i}" for i in range(self.agent_count)]
         self.scenarios: List[str] = []
-
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        
+        agent_spec = AgentSpec(
+            interface=AgentInterface(
+                waypoint_paths=True,
+                action=ActionSpaceType.RawThrottle,
+                max_episode_steps=None, 
+                top_down_rgb=True
+            ),
+        )
 
         agent_interfaces: Dict[str, Any] = {
             agent_id: agent_spec.interface for agent_id in self.agent_names
         }
 
         scenarios_path = pathlib.Path(__file__).absolute().parent.parent / self.scenario_subdir
+        traffic_path = pathlib.Path(__file__).absolute().parent.parent / cfg.traffic_base_path
+        
         self.scenarios = [
-            scenarios_path
+            str(scenarios_path)
         ]
-        self.scenarios.sort()
 
-        if parallel:
+        if cfg.parallel:
             self.env = make_env_parallel(
                 "smarts.env:hiway-v1",
                 agent_interfaces,
-                self.scenarios, not envision,
-                seed, num_env=self.num_env,
-                stack_frames=stack_frames, 
-                observation_shape=observation_shape,
-                message_dim=message_dim,
-                message_raw_dim=message_raw_dim,
+                self.scenarios, 
+                not cfg.envision,
+                num_env=self.num_env,
+                seed=cfg.seed,
+                stack_frames=cfg.stack_frames, 
+                observation_shape=cfg.observation_shape,
+                message_dim=cfg.message_dim,
+                message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
+                dynamic_scenarios=cfg.dynamic_scenarios,
+                traffic_base_path=traffic_path
             )
         else:
             self.env = make_env(
                 "smarts.env:hiway-v1",
                 agent_interfaces,
                 self.scenarios,
-                headless=not envision,
-                seed=seed,
-                stack_frames=stack_frames,
-                observation_shape=observation_shape,
-                message_dim=message_dim,
-                message_raw_dim=message_raw_dim
+                not cfg.envision,
+                seed=cfg.seed,
+                stack_frames=cfg.stack_frames, 
+                observation_shape=cfg.observation_shape,
+                message_dim=cfg.message_dim,
+                message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
+                dynamic_scenarios=cfg.dynamic_scenarios,
+                traffic_base_path=traffic_path
             )
 
 

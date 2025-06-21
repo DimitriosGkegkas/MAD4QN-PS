@@ -1,0 +1,6 @@
+parallel: false
+evaluate: true
+tensorboard: false
+envision: true
+seed: 42
+eval_scenarios: null

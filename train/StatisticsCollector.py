@@ -44,7 +44,7 @@ class StatisticsCollector:
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
-        while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_evaluation_steps:
+        while True:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
             current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
             self.extract_scenario_data_batch(scenario_ids, current_state, infos, reward)
@@ -52,6 +52,8 @@ class StatisticsCollector:
 
             avg_rewards = self._average_rewards(reward)
             scores = [s + r for s, r in zip(scores, avg_rewards)]
+            if self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) or ep_steps > self.max_evaluation_steps:
+                break
         self.collector.reset()
         return scores
     

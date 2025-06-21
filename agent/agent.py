@@ -3,6 +3,7 @@ import os
 from turtle import forward
 from typing import Any, List, Optional, Tuple
 from matplotlib.style import available
+from omegaconf import DictConfig
 from py import log
 import torch
 import matplotlib.pyplot as plt
@@ -22,44 +23,9 @@ from  GPUtil import getAvailable
 from dataclasses import dataclass
 from typing import Any, Tuple, Optional
 
-@dataclass
-class AgentConfig:
-    
-    # hidden layers for networks
-    communication_hidden_dim: List[int]
-    critic_hidden_dim: List[int]
-    actor_hidden_dim: List[int]
-    
-    input_dim: Tuple[int, int, int] = (3, 32, 32)
-    action_dim: int = 1
-    direction_dim: int = 4
-    feature_dim: int = 100
-    message_dim: int = 8
-    n_agents: int = 4
-
-    tau: float = 0.005
-    gamma: float = 0.99
-    lr: float = 1e-4
-    alpha: float = 0.1
-    memory_max_size: int = 1_000_000
-    batch_size: int = 64
-
-    reconstruction_coef: float = 0.01
-    img_reconstruction_coef: float = 0.01
-    reg_coef: float = 0.1
-    smoothness_coef: float = 0.01
-
-    target_update_interval: int = 2
-    actor_update_frequency: int = 1
-    automatic_entropy_tuning: bool = True
-    entropy_decay_rate: float = 0.0001
-
-    chkpt_dir: str = 'tmp/dqn'
-    
-
 
 class Agent:
-    def __init__(self, config: AgentConfig):
+    def __init__(self, config: DictConfig):
         self.input_dim = config.input_dim
         self.action_dim = config.action_dim
         self.direction_dim = config.direction_dim
@@ -75,9 +41,7 @@ class Agent:
         self.batch_size = config.batch_size
 
         self.reconstruction_coef = config.reconstruction_coef
-        self.img_reconstruction_coef = config.img_reconstruction_coef
         self.reg_coef = config.reg_coef
-        self.smoothness_coef = config.smoothness_coef
 
         self.target_update_interval = config.target_update_interval
         self.actor_update_frequency = config.actor_update_frequency
@@ -671,7 +635,6 @@ class Agent:
                 'action_dim': self.action_dim,
                 'n_agents': self.n_agents,
                 'reconstruction_coef': self.reconstruction_coef,
-                'smoothness_coef': self.smoothness_coef
             }
         }
 

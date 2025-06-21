@@ -34,7 +34,8 @@ class EpisodeManager:
         Determines if a single episode is done based on reward signals,
         observation presence, termination flags, and custom info flags.
         """
-        return self._crashed(truncated) or self._is_episode_terminated(observations, terminated, info)
+        no_social_traffic = not info.get("social_traffic", True)
+        return (self._crashed(truncated) or self._is_episode_terminated(observations, terminated, info)) and no_social_traffic
 
     def is_batch_episode_done(
         self,
@@ -66,5 +67,4 @@ class EpisodeManager:
     ) -> bool:
         no_observations = len(observations) == 0
         terminated_all = terminated.get("__all__", False)
-        no_social_traffic = not info.get("social_traffic", True)
-        return (no_observations or terminated_all) and no_social_traffic
+        return (no_observations or terminated_all)

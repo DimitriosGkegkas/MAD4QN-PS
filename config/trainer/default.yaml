@@ -1,0 +1,6 @@
+total_steps: 1000000
+max_training_steps: 10
+algorithm_identifier: ${algorithm_identifier}
+tensorboard: ${shared.tensorboard}
+evaluate: ${shared.evaluate}
+agent_count: ${environment.agent_count}

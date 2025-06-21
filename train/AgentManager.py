@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Optional, Tuple, Union
 import numpy as np
-from agent import Agent, AgentConfig
+from omegaconf import DictConfig
+from agent import Agent
 
 from .BaseTrainer import BaseTrainer
 
@@ -11,19 +12,17 @@ class AgentManager:
     def __init__(
         self,
         agent_names: List[str],
-        agent_config: AgentConfig,
+        cfg: DictConfig,
         logger: BaseTrainer,
-        evaluate: bool = False,
-        parallel: bool = True
     ):
         self.agent_names = agent_names
-        self.evaluate = evaluate
-        self.message_dim = agent_config.message_dim
-        self.parallel = parallel
+        self.evaluate = cfg.evaluate
+        self.message_dim = cfg.message_dim
+        self.parallel = cfg.parallel
         self.logger = logger
         
 
-        self.agent = Agent(agent_config)
+        self.agent = Agent(cfg)
     
     
     def action(

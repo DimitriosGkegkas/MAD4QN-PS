@@ -1,42 +1,33 @@
-from agent import AgentConfig
-from train.MultiAgentTrainer import MultiAgentTrainer, TrainerConfig
+from train.MultiAgentTrainer import MultiAgentTrainer
+import hydra
+from omegaconf import DictConfig, OmegaConf
+import logging
 
+# Quiet noisy loggers
+logging.getLogger("SMARTS").setLevel(logging.WARNING)
+logging.getLogger("SensorManager").setLevel(logging.WARNING)
+logging.getLogger("websockets").setLevel(logging.WARNING)
+logging.getLogger("Client").setLevel(logging.WARNING)
 
-if __name__ == '__main__':
-    config = TrainerConfig(
-        algorithm_identifier="SAC3",
-        num_env=2,
-        evaluation_step=10,
-        max_training_steps=400, # Maximum steps per episode, can be adjusted based on the environment
-        max_evaluation_steps=200,
-        agent_count=4,
-        observation_shape=(128, 128, 3),  # Shape of the observation space, can be adjusted based on the environment
-        eval_scenarios=[0,1, 192, 195],
-        # parallel=False,
-        # envision=True,
-        evaluate=True
-    )
-    agent_config = AgentConfig(
-        feature_dim=64,
-        message_dim=8,
-        batch_size=258, 
-        
-        communication_hidden_dim= [32, 16],
-        critic_hidden_dim= [128, 128, 32],
-        actor_hidden_dim= [128, 128, 32],
-        memory_max_size= int(100000),
-        
-        reconstruction_coef=0.1,
-        img_reconstruction_coef=0.1,
-        reg_coef=0.1,
-        smoothness_coef= 0.01,
-    )
-
-    trainer = MultiAgentTrainer(config, agent_config)
-    # trainer.preload("models/SAC2/20250619/best_checkpoint.pth")
+@hydra.main(config_path="config", config_name="config", version_base="1.3")
+def main(cfg: DictConfig):    
     
+    trainer = MultiAgentTrainer(cfg)
 
-    # trainer.train()
-    trainer.evaluate()
-    # trainer.envision(195)
-    
+    # Preload checkpoint if specified
+    if cfg.get("preload"):
+        print(f"Preloading checkpoint: {cfg.preload}")
+        trainer.preload(cfg.preload)
+
+    # Dispatch based on mode
+    if cfg.mode.action == "train":
+        trainer.train()
+    elif cfg.mode.action == "evaluate":
+        trainer.evaluate()
+    elif cfg.mode.action == "envision":
+        trainer.envision(cfg.mode.envision_id)
+    else:
+        raise ValueError(f"Unknown mode action: {cfg.mode.action}")
+
+if __name__ == "__main__":
+    main()

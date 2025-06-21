@@ -1,0 +1,15 @@
+agent_count: 0
+num_env: 2
+stack_frames: 4
+observation_shape: [128, 128, 3]
+dynamic_scenarios: false
+scenario_subdir: "environment/scenarios/traffic_lights/FTTL1"
+traffic_base_path: "environment/scenarios/traffic"
+parallel: ${shared.parallel}
+envision: ${shared.envision}
+message_dim: ${agent.message_dim}
+direction_dim: ${agent.direction_dim}
+feature_dim: ${agent.feature_dim}
+action_dim: ${agent.action_dim}
+seed: ${shared.seed}
+input_dim: null

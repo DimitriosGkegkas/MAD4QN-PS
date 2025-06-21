@@ -1,5 +1,6 @@
 from typing import List, Dict, Tuple, Optional
 import numpy as np
+from omegaconf import DictConfig
 
 from train.AgentManager import AgentManager
 from train.BaseTrainer import BaseTrainer
@@ -15,11 +16,7 @@ class Trainer:
         episode_manager: EpisodeManager,  # ScenarioManager instance
         evaluator: Evaluator,       # Evaluator instance
         env_manager: EnvironmentManager,     # EnvironmentManager instance
-        total_steps: int,
-        agent_count: int,
-        algorithm_identifier: str,
-        evaluation_step: int,
-        max_training_steps: int = 1000
+        cfg: DictConfig
     ):
         self.logger = trainer_logger
         self.agent_manager = agent_manager
@@ -27,11 +24,10 @@ class Trainer:
         self.env_manager = env_manager
         self.evaluator = evaluator
         
-        self.total_steps = total_steps
-        self.agent_count = agent_count
-        self.algorithm_identifier = algorithm_identifier
-        self.evaluation_step = evaluation_step
-        self.max_training_steps = max_training_steps
+        self.total_steps = cfg.total_steps
+        self.agent_count = cfg.agent_count
+        self.algorithm_identifier = cfg.algorithm_identifier
+        self.max_training_steps = cfg.max_training_steps
         
         self.n_steps = 0
         self.n_episodes = 0
@@ -46,7 +42,7 @@ class Trainer:
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
-        while not self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) and ep_steps < self.max_training_steps:
+        while True:
             action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, terminate, truncated)
             
             next_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages, next_raw_messages)
@@ -61,7 +57,8 @@ class Trainer:
             scores = [sum(r.values()) + s for r, s in zip(reward, scores)]
             self.logger.after_train_step(np.mean(scores), self.n_episodes, ep_steps)
         
-
+            if self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) or ep_steps > self.max_training_steps:
+                break
 
         # Log and evaluate
         self.logger.after_episode_batch(

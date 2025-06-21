@@ -3,22 +3,23 @@ import os
 import sys
 import numpy as np
 from datetime import datetime
+from omegaconf import DictConfig
 from torch.utils.tensorboard import SummaryWriter
 from environment.help_scenario import all_scenarios_to_number_of_agents
 from collections import defaultdict
 
 class BaseTrainer:
-    def __init__(self, algorithm_identifier: str, enable_tensorboard: bool = True, evaluate: bool = False):
+    def __init__(self, cfg: DictConfig):
         self.scores_list: List[Tuple[float, str, int]] = []
         self.scores_per_scenario_list: List[Any] = []
         self.start_time = datetime.now()
 
-        self.run_name = os.path.join(algorithm_identifier, self.start_time.strftime("%d%m%Y_%H%M%S"))
+        self.run_name = os.path.join(cfg.algorithm_identifier, self.start_time.strftime("%d%m%Y_%H%M%S"))
         
         self.scenario_count = 0
 
         self.writer: Optional[SummaryWriter] = None
-        if not evaluate and enable_tensorboard:
+        if not cfg.evaluate and cfg.tensorboard:
             tensorboard_path = os.path.join("data", "tensorboard", self.run_name)
             os.makedirs(tensorboard_path, exist_ok=True)
             self.writer = SummaryWriter(tensorboard_path)

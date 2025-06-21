@@ -1,0 +1,12 @@
+defaults:
+  - mode: envision          # choose mode
+  - shared: ${mode}
+  - logging: default
+  - trainer: default
+  - agent: default
+  - environment: default
+  - evaluator: default
+  - _self_                # <-- IMPORTANT: must be last!
+
+algorithm_identifier: "SAC"
+preload: null  # optional override from CLI
