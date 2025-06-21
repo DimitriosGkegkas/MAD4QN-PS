@@ -1,9 +1,9 @@
-agent_count: 0
+agent_count: 4
 num_env: 2
 stack_frames: 4
 observation_shape: [128, 128, 3]
-dynamic_scenarios: false
-scenario_subdir: "environment/scenarios/traffic_lights/FTTL1"
+dynamic_scenarios: true
+scenario_subdir: "environment/scenarios/multi_scenario"
 traffic_base_path: "environment/scenarios/traffic"
 parallel: ${shared.parallel}
 envision: ${shared.envision}

@@ -20,7 +20,8 @@ class EpisodeManager:
         """
         if self.parallel:
             return self.is_batch_episode_done(observations, rewards, terminated, truncated, info)
-        return self.is_episode_done(observations, rewards, terminated, truncated, info)
+        else:
+            return self.is_episode_done(observations, rewards, terminated, truncated, info)
 
     def is_episode_done(
         self,
@@ -35,7 +36,7 @@ class EpisodeManager:
         observation presence, termination flags, and custom info flags.
         """
         no_social_traffic = not info.get("social_traffic", True)
-        return (self._crashed(truncated) or self._is_episode_terminated(observations, terminated, info)) and no_social_traffic
+        return (self._is_episode_terminated(observations, terminated, info)) and no_social_traffic
 
     def is_batch_episode_done(
         self,
