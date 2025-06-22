@@ -137,7 +137,7 @@ class Agent:
             self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
             self.log_alpha.requires_grad = True
             # set target entropy to -|A|
-            self.target_entropy = -self.action_dim
+            self.target_entropy = -0.4*self.action_dim
             self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
                                                     lr=self.lr,)
             self.min_entropy = -0.1*self.action_dim  # Minimum entropy for the target entropy
@@ -334,16 +334,20 @@ class Agent:
             alpha_loss = (self.alpha *
                           (-log_prob - self.target_entropy).detach()).mean()
             alpha_loss.backward()
+            torch.nn.utils.clip_grad_norm_([self.log_alpha], max_norm=1.0)
             self.log_alpha_optimizer.step()
             if logger is not None:
+                logger.log_scalar("alpha", self.alpha.item(), self.updates)
                 logger.log_scalar("loss/alpha", alpha_loss.item(), self.updates)
-                logger.log_scalar("alpha", self.alpha, self.updates)
                 logger.log_scalar("target_entropy", self.target_entropy, self.updates)
             # self.update_target_entropy()
         
         if logger is None:
             return
 
+        logger.log_scalar("policy/log_prob_mean", log_prob.mean().item(), self.updates)
+        logger.log_scalar("policy/log_prob_min", log_prob.min().item(), self.updates)
+        logger.log_scalar("policy/log_prob_max", log_prob.max().item(), self.updates)
 
         logger.log_scalar("policy/action_mean", action.mean(), self.updates)
         logger.log_scalar("policy/action_std", action.std(), self.updates)
@@ -659,14 +663,14 @@ class Agent:
         self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
 
-        # === Load alpha/entropy if available ===
-        if checkpoint.get('automatic_entropy_tuning', False):
-            self.automatic_entropy_tuning = True
-            self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
-            self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
-            self.log_alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
-            self.log_alpha = torch.tensor(self.log_alpha).to(self.device)
-            self.log_alpha.requires_grad = True
+        # # === Load alpha/entropy if available ===
+        # if checkpoint.get('automatic_entropy_tuning', False):
+        #     self.automatic_entropy_tuning = True
+        #     self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
+        #     self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
+        #     self.log_alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
+        #     self.log_alpha = torch.tensor(self.log_alpha).to(self.device)
+        #     self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
         for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder, self.message_decoder]:

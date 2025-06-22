@@ -58,7 +58,7 @@ class Reward(gym.Wrapper):
         for i, agent_name in enumerate(self.agent_names):
             if agent_name in obs.keys():
                 reward[agent_name] = 0
-                if obs[agent_name]["events"]["not_moving"] or env_reward[agent_name] < 0.01:
+                if obs[agent_name]["events"]["not_moving"] or env_reward[agent_name] < 0.04:
                     reward[agent_name] -= self.k
                 elif obs[agent_name]["events"]["reached_goal"]:
                     reward[agent_name] += 10 * self.k
@@ -69,7 +69,7 @@ class Reward(gym.Wrapper):
                     or obs[agent_name]["events"]["wrong_way"]:
                     reward[agent_name] -= 10 * self.k
                 else:
-                    reward[agent_name] += self.lx*env_reward[agent_name]
+                    reward[agent_name] += self.lx*env_reward[agent_name]*env_reward[agent_name]
                     
                     reward[agent_name] -= self.lat*get_lateral_error(obs[agent_name])
                     

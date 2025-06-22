@@ -12,7 +12,7 @@ n_agents: 4
 tau: 0.005
 gamma: 0.99
 lr: 0.0001
-alpha: 0.1
+alpha: 0.4
 memory_max_size: 100000
 batch_size: 258
 
