@@ -317,12 +317,13 @@ class Agent:
 
 
         # Reconstruction loss
-        recon_loss = self.get_reconstruction_loss(action, embedded_state, direction_batch)
+        # recon_loss = self.get_reconstruction_loss(action, embedded_state, direction_batch)
 
         # === Total loss ===
         total_loss = actor_loss
-        total_loss += self.reconstruction_coef * recon_loss
-        # total_loss += self.reg_coef * regularization_loss  # Add regularization loss
+        # total_loss += self.reconstruction_coef * recon_loss
+        regularization_loss = torch.mean(torch.clamp(torch.abs(mu) - 2.0, min=0.0) ** 2)
+        total_loss += self.reg_coef * regularization_loss  # Add regularization loss
 
         # === Optimize policy ===
         self.policy_optim.zero_grad()
@@ -354,9 +355,8 @@ class Agent:
         logger.log_scalar("policy/action_min", action.min(), self.updates)
         logger.log_scalar("policy/action_max", action.max(), self.updates)
         logger.log_scalar("loss/actor", actor_loss.item(), self.updates)
-        regularization_loss = torch.mean(torch.clamp(torch.abs(mu) - 1.0, min=0.0) ** 2)
         logger.log_scalar("policy/regularization", regularization_loss.item(), self.updates)
-        logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
+        # logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
         
         
 
