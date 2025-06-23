@@ -18,7 +18,7 @@ class MultiAgentTrainer:
         self.env_manager = EnvironmentManager(cfg.environment)
         
         agent_names = self.env_manager.get_agent_names()
-        self.episode_manager = EpisodeManager(agent_names, parallel=cfg.shared.parallel)
+        self.episode_manager = EpisodeManager(agent_names)
 
         cfg.agent.input_dim = (cfg.environment.observation_shape[2] * cfg.environment.stack_frames, cfg.environment.observation_shape[0], cfg.environment.observation_shape[1])
         self.agent_manager = AgentManager(

@@ -15,46 +15,8 @@ from .SocialAgentsWrapper import SocialAgentsWrapper
 
 
 
+
 def make_env(
-    env_name, 
-    agent_interfaces, 
-    scenario_path, 
-    headless, 
-    seed, 
-    stack_frames = 4, 
-    observation_shape=(32, 32, 3), 
-    message_dim=8, 
-    message_raw_dim=8, 
-    dynamic_scenarios = False,
-    traffic_base_path=None
-    ) -> gym.Env:
-    # Create environment
-    env = gym.make(
-        env_name,
-        scenarios=scenario_path,
-        agent_interfaces=agent_interfaces,
-        headless=headless,  # If False, enables Envision display.
-        visdom=False,  # If True, enables Visdom display.
-        seed=seed,
-        scenarios_order = ScenarioOrder.sequential
-    )
-    agent_names = list(agent_interfaces.keys())
-    
-    env = SocialAgentsWrapper(env, agent_names=agent_names)
-    env = InfoWrapper(env, agent_names=agent_names)
-    env = Reward(env=env, agent_names=agent_names)
-    env = Observation(shape=observation_shape, env=env, agent_names=agent_names)
-    env = StackFrames(env, repeat=stack_frames, agent_names=agent_names)
-    env = Direction(env, agent_names=agent_names)
-    env = CommunicationWrapper(env, agent_names=agent_names, message_dim=message_dim, message_raw_dim=message_raw_dim)
-    env = Scenarios(env, agent_names=agent_names, scenario_path=scenario_path, traffic_base_path=traffic_base_path,dynamic_scenarios=dynamic_scenarios)
-
-    return env
-
-
-
-
-def make_env_parallel(
     env_name, 
     agent_interfaces, 
     scenario_path, 

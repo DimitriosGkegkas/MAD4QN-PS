@@ -1,8 +1,8 @@
-parallel: true
 evaluate: false
 tensorboard: true
 envision: false
 seed: 42
+num_env: 10
 eval_scenarios: [
                   # Length 1 (4)
                   0, 2, 5, 8,

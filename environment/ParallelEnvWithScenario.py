@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, Sequence, Tuple
 
 import cloudpickle
 import gymnasium as gym
+import pip
 
 
 EnvConstructor = Callable[[int], gym.Env]
@@ -45,6 +46,7 @@ class _Message(Enum):
     EXCEPTION = 7
     SCENARIO = 8
     PROBS = 9
+    AUTO_RESET = 10
 
 
 class ParallelEnvWithScenario(object):
@@ -202,7 +204,14 @@ class ParallelEnvWithScenario(object):
             )
 
         return observation_space, action_space
-    
+    def auto_reset(self, enable: bool):
+        """Enable or disable automatic reset of the environment.
+
+        Args:
+            enable (bool): If True, the environment will automatically reset when all agents are done.
+        """
+        self._call(_Message.AUTO_RESET, [enable] * self._num_envs)
+        
     def set_scenario(self, scenarios: Sequence[str]):
         """Sets the scenario for each environment.
 
@@ -273,8 +282,8 @@ class ParallelEnvWithScenario(object):
         else:
             payload = actions
         result = self._call(_Message.STEP, *payload)
-        observations, rewards, terminateds, truncateds, infos = zip(*result)
-        return (observations, rewards, terminateds, truncateds, infos)
+    
+        return  zip(*result)
 
     def close(self, terminate=False):
         """Sends a close message to all external processes.
@@ -349,15 +358,16 @@ def _worker(
                 pipe.send((_Message.RESULT, res))
             elif message == _Message.STEP:
                 observation, reward, terminated, truncated, info = env.step(*payload)
+                _observation = observation
                 # TODO at some point I can check if there are less than 4 cars and end the simulation (reset it) to move on if I want oto have async.
-                if terminated["__all__"] and auto_reset:
+                if truncated["__all__"] and auto_reset:
                     # Final observation can be obtained from `info` as follows:
                     # `final_obs = info[agent_id]["env_obs"]`
-                    observation, _ = env.reset()
+                    _observation, _, _, _, _ = env.reset()
                 pipe.send(
                     (
                         _Message.RESULT,
-                        (observation, reward, terminated, truncated, info),
+                        (observation, reward, terminated, truncated, info, _observation),
                     )
                 )
             elif message == _Message.SCENARIO:
@@ -365,6 +375,9 @@ def _worker(
                 pipe.send((_Message.RESULT, None))
             elif message == _Message.PROBS:
                 env.modify_probs(*payload)
+                pipe.send((_Message.RESULT, None))
+            elif message == _Message.AUTO_RESET:
+                auto_reset = payload[0]
                 pipe.send((_Message.RESULT, None))
             elif message == _Message.CLOSE:
                 break

@@ -13,12 +13,11 @@ tau: 0.005
 gamma: 0.99
 lr: 0.0001
 alpha: 0.4
-memory_max_size: 100000
-batch_size: 258
-
+memory_max_size: 10000
+batch_size: 256
 reconstruction_coef: 0.1
 reg_coef: 0.1
-target_update_interval: 2
+target_update_interval: 1
 actor_update_frequency: 1
 automatic_entropy_tuning: true
 entropy_decay_rate: 0.0001
@@ -26,4 +25,3 @@ entropy_decay_rate: 0.0001
 chkpt_dir: "models/${algorithm_identifier}"
 
 evaluate: ${shared.evaluate}
-parallel: ${shared.parallel}

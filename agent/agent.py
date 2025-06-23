@@ -290,6 +290,7 @@ class Agent:
             return
         
         logger.log_scalar("loss/critic", critic_loss.item(), self.updates)
+        logger.log_scalar("lr/critic", self.critic_optim.param_groups[0]["lr"], self.updates)
 
     def train_actor(
         self,
@@ -356,6 +357,7 @@ class Agent:
         logger.log_scalar("policy/action_max", action.max(), self.updates)
         logger.log_scalar("loss/actor", actor_loss.item(), self.updates)
         logger.log_scalar("policy/regularization", regularization_loss.item(), self.updates)
+        logger.log_scalar("lr/actor", self.policy_optim.param_groups[0]["lr"], self.updates)
         # logger.log_scalar("loss/reconstruction", recon_loss.item(), self.updates)
         
         

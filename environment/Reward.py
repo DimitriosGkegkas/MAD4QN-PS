@@ -1,11 +1,11 @@
 import gymnasium as gym
 import numpy as np
 from utils import get_lateral_error
-
+from smarts.core.coordinates import Heading
 
 
 class Reward(gym.Wrapper):
-    def __init__(self, env: gym.Env, agent_names=None, gains= {"la": 0.01, "lj": 0.01, "lt": 1, "lx": 1, "k": 1, "lat": 1}):
+    def __init__(self, env: gym.Env, agent_names=None, gains= {"la": 0.03, "lj": 0.03, "lt": 1, "lx": 1, "k": 1, "lat": 1}):
         """
         Initializes the Reward wrapper.
 
@@ -17,8 +17,8 @@ class Reward(gym.Wrapper):
         super().__init__(env)
         self.agent_names = agent_names or ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
         self.env = env
-        self.la = gains.get("la", 0.01)  # Linear acceleration gain
-        self.lj = gains.get("lj", 0.01)  # Jerk
+        self.la = gains.get("la", 0.03)  # Linear acceleration gain
+        self.lj = gains.get("lj", 0.03)  # Jerk
         self.lt = gains.get("lt", 1)     # Time separation gain
         self.lx = gains.get("lx", 1)     # Lateral error gain
         self.k = gains.get("k", 1)       # Penalty for not moving
@@ -41,7 +41,29 @@ class Reward(gym.Wrapper):
         """
         obs, reward, terminated, truncated, info = self.env.step(action)
         wrapped_reward = self._compute_reward(obs, reward, info)
-        return obs, wrapped_reward, terminated, truncated, info
+        return obs, wrapped_reward, terminated, self._truncate_if_one_crash(obs, truncated), info
+    
+    
+    def _truncate_if_one_crash(self, obs: dict, truncated: dict) -> bool:
+        """
+        Checks if the environment should be truncated due to a crash.
+        truncated["__all__"] = True if any agent has crashed or gone off-route.
+
+        Args:
+            obs (dict): The observation dictionary.
+            info (dict): The info dictionary.
+
+        Returns:
+            bool: True if the environment should be truncated, False otherwise.
+        """
+        for agent_name in self.agent_names:
+            if agent_name in obs.keys():
+                if obs[agent_name]["events"]["collisions"] or obs[agent_name]["events"]["off_route"] \
+                    or obs[agent_name]["events"]["off_road"] or obs[agent_name]["events"]["on_shoulder"] \
+                    or obs[agent_name]["events"]["wrong_way"]:
+                    truncated["__all__"] = True
+                    return truncated
+        return truncated
     
     def _compute_reward(self, obs: dict, env_reward: dict, info: dict) -> np.ndarray:
         """
@@ -73,11 +95,17 @@ class Reward(gym.Wrapper):
                     
                     reward[agent_name] -= self.lat*get_lateral_error(obs[agent_name])
                     
-                    acceleration = np.linalg.norm(obs[agent_name]["ego_vehicle_state"]["linear_acceleration"])
-                    jerk = np.linalg.norm(obs[agent_name]["ego_vehicle_state"]["linear_jerk"])
+                    acceleration = obs[agent_name]["ego_vehicle_state"]["linear_acceleration"][0]
+                    jerk = obs[agent_name]["ego_vehicle_state"]["linear_jerk"][0]
                     reward[agent_name] -= self.la * acceleration + self.lj * jerk
                     
                     timeSeperation = info[agent_name]["time_separation"] if "time_separation" in info[agent_name] else 0.0
                     reward[agent_name] -= self.lt*timeSeperation
 
         return reward
+
+
+def get_directional(
+    heading: np.ndarray, acceleration: np.ndarray
+) -> float:
+    return float(np.dot(acceleration[:2], heading))

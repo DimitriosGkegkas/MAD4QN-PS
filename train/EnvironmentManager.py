@@ -4,7 +4,7 @@ from omegaconf import DictConfig
 import torch
 import pathlib
 import numpy as np
-from environment import make_env, make_env_parallel
+from environment import make_env
 from smarts.core.agent_interface import AgentInterface
 from smarts.zoo.agent_spec import AgentSpec
 from smarts.core.controllers import ActionSpaceType
@@ -27,7 +27,8 @@ class EnvironmentManager:
                 waypoint_paths=True,
                 action=ActionSpaceType.RawThrottle,
                 max_episode_steps=None, 
-                top_down_rgb=True
+                top_down_rgb=True,
+                accelerometer=True
             ),
         )
 
@@ -42,41 +43,36 @@ class EnvironmentManager:
             str(scenarios_path)
         ]
 
-        if cfg.parallel:
-            self.env = make_env_parallel(
-                "smarts.env:hiway-v1",
-                agent_interfaces,
-                self.scenarios, 
-                not cfg.envision,
-                num_env=self.num_env,
-                seed=cfg.seed,
-                stack_frames=cfg.stack_frames, 
-                observation_shape=cfg.observation_shape,
-                message_dim=cfg.message_dim,
-                message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
-                dynamic_scenarios=cfg.dynamic_scenarios,
-                traffic_base_path=traffic_path
-            )
-        else:
-            self.env = make_env(
-                "smarts.env:hiway-v1",
-                agent_interfaces,
-                self.scenarios,
-                not cfg.envision,
-                seed=cfg.seed,
-                stack_frames=cfg.stack_frames, 
-                observation_shape=cfg.observation_shape,
-                message_dim=cfg.message_dim,
-                message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
-                dynamic_scenarios=cfg.dynamic_scenarios,
-                traffic_base_path=traffic_path
-            )
+        self.env = make_env(
+            "smarts.env:hiway-v1",
+            agent_interfaces,
+            self.scenarios, 
+            not cfg.envision,
+            num_env=self.num_env,
+            seed=cfg.seed,
+            stack_frames=cfg.stack_frames, 
+            observation_shape=cfg.observation_shape,
+            message_dim=cfg.message_dim,
+            message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
+            dynamic_scenarios=cfg.dynamic_scenarios,
+            traffic_base_path=traffic_path
+        )
 
 
     def reset(self, scenario_ids: Optional[Union[List[int], int]] = None) -> Any:
         if scenario_ids is not None:
             self.env.set_scenario(scenario_ids)
         return self.env.reset()
+    
+    
+    def auto_reset(self, enable: bool) -> None:
+        """
+        Enable or disable automatic reset of the environment.
+        
+        Args:
+            enable (bool): If True, the environment will automatically reset when all agents are done.
+        """
+        self.env.auto_reset(enable)
 
 
     def step(self, *args, **kwargs) -> Any:

@@ -1,4 +1,4 @@
-evaluation_step: 10
-max_evaluation_steps: 300
+evaluation_step: 1
+max_evaluation_steps: 200
 eval_scenarios: ${shared.eval_scenarios}
 algorithm_identifier: ${algorithm_identifier}

@@ -35,6 +35,7 @@ class Evaluator:
         self.agent_manager.eval()
         rewards_all: List[float] = []
         self.logger.log_percentage(0.0)
+        self.env_manager.auto_reset(False)
         
         for i, scenario_ids in enumerate(self.logger.slice_list(self.eval_scenarios, self.env_manager.num_env)):
             
@@ -65,7 +66,7 @@ class Evaluator:
 
         while True:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
-            current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
+            current_state, reward, terminate, truncated, infos, _ = self.env_manager.step(action, next_messages)
             ep_steps += 1
 
             avg_rewards = self._average_rewards(reward)
@@ -77,12 +78,12 @@ class Evaluator:
         
     def envision(self, scenario_id: int) -> None:
         self.agent_manager.eval()
-        current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_id)
+        current_state, terminate, truncated, reward, infos = self.env_manager.reset([scenario_id])
         ep_steps = 0
         while True:
             action, next_messages, _  = self.agent_manager.action(current_state, terminate, truncated)
             
-            current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
+            current_state, reward, terminate, truncated, infos, _ = self.env_manager.step(action, next_messages)
 
             ep_steps += 1
             if self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) or ep_steps > self.max_evaluation_steps:

@@ -1,11 +1,10 @@
 agent_count: 4
-num_env: 2
+num_env: ${shared.num_env}
 stack_frames: 4
 observation_shape: [128, 128, 3]
 dynamic_scenarios: true
 scenario_subdir: "environment/scenarios/multi_scenario"
 traffic_base_path: "environment/scenarios/traffic"
-parallel: ${shared.parallel}
 envision: ${shared.envision}
 message_dim: ${agent.message_dim}
 direction_dim: ${agent.direction_dim}

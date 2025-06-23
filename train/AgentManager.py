@@ -18,7 +18,6 @@ class AgentManager:
         self.agent_names = agent_names
         self.evaluate = cfg.evaluate
         self.message_dim = cfg.message_dim
-        self.parallel = cfg.parallel
         self.logger = logger
         
 

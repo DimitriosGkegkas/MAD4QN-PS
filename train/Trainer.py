@@ -38,27 +38,25 @@ class Trainer:
 
     def _episode_train(self) -> None:
         self.agent_manager.train()
-        current_state, terminate, truncated, reward, infos = self.env_manager.reset()
+        self.env_manager.auto_reset(True)
+        current_state, _terminate, _truncated, _, _ = self.env_manager.reset()
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
-        while True:
-            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, terminate, truncated)
+        while ep_steps < self.max_training_steps:
+            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, _terminate, _truncated)
             
-            next_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages, next_raw_messages)
+            next_state, reward, terminate, truncated, _, _next_state = self.env_manager.step(action, next_messages, next_raw_messages)
 
             self.agent_manager.store_transitions(current_state, action, reward, next_state, terminate, truncated)
             self.agent_manager.update_agent(step=self.n_steps)
             
-            current_state = next_state
+            current_state = _next_state
             self.n_steps += 1
             ep_steps += 1
             
             scores = [sum(r.values()) + s for r, s in zip(reward, scores)]
             self.logger.after_train_step(np.mean(scores), self.n_episodes, ep_steps)
-        
-            if self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) or ep_steps > self.max_training_steps:
-                break
 
         # Log and evaluate
         self.logger.after_episode_batch(

@@ -1,9 +1,8 @@
 from typing import Dict, List, Any
 
 class EpisodeManager:
-    def __init__(self, agent_names: List[str], parallel: bool = True):
+    def __init__(self, agent_names: List[str]):
         self.agent_names = agent_names
-        self.parallel = parallel
         
         
     def is_done(
@@ -18,10 +17,7 @@ class EpisodeManager:
         Determines if the episode is done based on reward signals,
         observation presence, termination flags, and custom info flags.
         """
-        if self.parallel:
-            return self.is_batch_episode_done(observations, rewards, terminated, truncated, info)
-        else:
-            return self.is_episode_done(observations, rewards, terminated, truncated, info)
+        return self.is_batch_episode_done(observations, rewards, terminated, truncated, info)
 
     def is_episode_done(
         self,

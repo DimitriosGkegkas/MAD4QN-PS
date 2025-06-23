@@ -46,7 +46,7 @@ class StatisticsCollector:
 
         while True:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
-            current_state, reward, terminate, truncated, infos = self.env_manager.step(action, next_messages)
+            current_state, reward, terminate, truncated, infos, _ = self.env_manager.step(action, next_messages)
             self.extract_scenario_data_batch(scenario_ids, current_state, infos, reward)
             ep_steps += 1
 
@@ -105,8 +105,8 @@ class StatisticsCollector:
                 infos[agent_id]['env_obs'].events.wrong_way:
                 self.collector.mark_agent_crashed(agent_id, scenario_id)
 
-            # if infos[agent_id]['env_obs'].events.reached_goal:
-            self.collector.mark_agent_succeeded(agent_id, scenario_id)
+            if infos[agent_id]['env_obs'].events.reached_goal:
+                self.collector.mark_agent_succeeded(agent_id, scenario_id)
 
         for social in infos.get("social_traffic", []):
             speed = np.linalg.norm(social["linear_velocity"])

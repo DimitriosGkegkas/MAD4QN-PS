@@ -20,6 +20,7 @@ if __name__ == "__main__":
         "MAD4QN-v1",
         "MAD4QN",
         "SAC3",
+        "SAC",
         # # "mad4qn",
         # "DropOutLayer2",
         # "DropOutLayer2-v1",
@@ -40,5 +41,5 @@ if __name__ == "__main__":
 
     # Plot average travel time comparison
     # plotter.plot_travel_speed_success()
-    # plotter.plot_combined_statistics()
-    plotter.plot_comfort_energy()
+    plotter.plot_combined_statistics()
+    # plotter.plot_comfort_energy()
