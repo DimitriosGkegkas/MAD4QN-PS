@@ -664,6 +664,14 @@ class Agent:
         # === Load optimizers ===
         self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
+        # === Override learning rates ===
+        for group in self.critic_optim.param_groups:
+            group["lr"] = self.lr
+
+        for group in self.policy_optim.param_groups:
+            group["lr"] = self.lr
+
+
 
         # # === Load alpha/entropy if available ===
         # if checkpoint.get('automatic_entropy_tuning', False):
