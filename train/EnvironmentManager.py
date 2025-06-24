@@ -8,7 +8,7 @@ from environment import make_env
 from smarts.core.agent_interface import AgentInterface
 from smarts.zoo.agent_spec import AgentSpec
 from smarts.core.controllers import ActionSpaceType
-
+from smarts.core.agent_interface import DoneCriteria
 
 class EnvironmentManager:
     def __init__(
@@ -28,7 +28,14 @@ class EnvironmentManager:
                 action=ActionSpaceType.RawThrottle,
                 max_episode_steps=None, 
                 top_down_rgb=True,
-                accelerometer=True
+                accelerometer=True,
+                done_criteria= DoneCriteria(
+                    collision=True,
+                    off_road=True,
+                    off_route=True,
+                    on_shoulder=True,
+                    wrong_way=True,
+                )
             ),
         )
 

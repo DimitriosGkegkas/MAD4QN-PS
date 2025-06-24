@@ -95,8 +95,8 @@ class Reward(gym.Wrapper):
                     
                     reward[agent_name] -= self.lat*get_lateral_error(obs[agent_name])
                     
-                    acceleration = obs[agent_name]["ego_vehicle_state"]["linear_acceleration"][0]
-                    jerk = obs[agent_name]["ego_vehicle_state"]["linear_jerk"][0]
+                    acceleration =  abs(obs[agent_name]["ego_vehicle_state"]["linear_acceleration"][0])
+                    jerk = abs(obs[agent_name]["ego_vehicle_state"]["linear_jerk"][0])
                     reward[agent_name] -= self.la * acceleration + self.lj * jerk
                     
                     timeSeperation = info[agent_name]["time_separation"] if "time_separation" in info[agent_name] else 0.0

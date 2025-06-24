@@ -3,6 +3,14 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import logging
 
+import os
+import warnings
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or '3' for errors only
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message="Setuptools is replacing distutils")
+
 # Quiet noisy loggers
 logging.getLogger("SMARTS").setLevel(logging.WARNING)
 logging.getLogger("SensorManager").setLevel(logging.WARNING)
