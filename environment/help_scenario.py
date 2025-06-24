@@ -46,10 +46,10 @@ starting_points: Dict[str, Start] = {
 }
 
 goal_points: Dict[str, PositionalGoal] = {
-    "west": PositionalGoal(position=Point(10.0, 40.62, 0.0), radius=1.0),
-    "east": PositionalGoal(position=Point(66.76, 37.42, 0.0), radius=1.0),
-    "north": PositionalGoal(position=Point(39.98, 66.19, 0.0), radius=1.0),
-    "south": PositionalGoal(position=Point(36.94, 10.0, 0.0), radius=1.0),
+    "west": PositionalGoal(position=Point(5.0, 40.62, 0.0), radius=5.0),
+    "east": PositionalGoal(position=Point(71.76, 37.42, 0.0), radius=5.0),
+    "north": PositionalGoal(position=Point(39.98, 71.19, 0.0), radius=5.0),
+    "south": PositionalGoal(position=Point(36.94, 5.0, 0.0), radius=5.0),
 }
 
 
