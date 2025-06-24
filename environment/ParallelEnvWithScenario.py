@@ -281,9 +281,10 @@ class ParallelEnvWithScenario(object):
             payload = (actions, message)
         else:
             payload = actions
-        result = self._call(_Message.STEP, *payload)
+        results = self._call(_Message.STEP, *payload)
+        observation, reward, terminated, truncated, info, _observation, _truncated, _terminated = zip(*results)
     
-        return  zip(*result)
+        return observation, reward, terminated, truncated, info, (_observation, _truncated, _terminated)
 
     def close(self, terminate=False):
         """Sends a close message to all external processes.
@@ -359,15 +360,25 @@ def _worker(
             elif message == _Message.STEP:
                 observation, reward, terminated, truncated, info = env.step(*payload)
                 _observation = observation
-                # TODO at some point I can check if there are less than 4 cars and end the simulation (reset it) to move on if I want oto have async.
-                if truncated["__all__"] and auto_reset:
-                    # Final observation can be obtained from `info` as follows:
-                    # `final_obs = info[agent_id]["env_obs"]`
-                    _observation, _, _, _, _ = env.reset()
+                _truncated = truncated
+                _terminated = terminated
+                
+                # either truncated or terminated is True, then reset the environment
+                # or all of the entries in terminated are true (except the all)
+                
+                should_reset = (
+                    truncated.get("__all__", False)
+                    or terminated.get("__all__", False)
+                    or all(val for key, val in terminated.items() if key != "__all__")
+                    or all(val for key, val in truncated.items() if key != "__all__")
+                )
+
+                if should_reset and auto_reset:
+                    _observation, _, _terminated, _truncated, _ = env.reset()
                 pipe.send(
                     (
                         _Message.RESULT,
-                        (observation, reward, terminated, truncated, info, _observation),
+                        (observation, reward, terminated, truncated, info, _observation, _truncated, _terminated),
                     )
                 )
             elif message == _Message.SCENARIO:

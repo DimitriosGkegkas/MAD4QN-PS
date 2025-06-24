@@ -39,19 +39,20 @@ class Trainer:
     def _episode_train(self) -> None:
         self.agent_manager.train()
         self.env_manager.auto_reset(True)
-        current_state, _terminate, _truncated, _, _ = self.env_manager.reset()
+        current_state, terminate, truncated, _, _ = self.env_manager.reset()
         ep_steps = 0
         scores = [0.0 for _ in current_state]
 
         while ep_steps < self.max_training_steps:
-            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, _terminate, _truncated)
+            action, next_messages, next_raw_messages  = self.agent_manager.action(current_state, terminate, truncated)
             
-            next_state, reward, terminate, truncated, _, _next_state = self.env_manager.step(action, next_messages, next_raw_messages)
+            next_state, reward, terminate, truncated, _, _next_step = self.env_manager.step(action, next_messages, next_raw_messages)
 
             self.agent_manager.store_transitions(current_state, action, reward, next_state, terminate, truncated)
             self.agent_manager.update_agent(step=self.n_steps)
             
-            current_state = _next_state
+            current_state, terminate, truncated = _next_step
+            
             self.n_steps += 1
             ep_steps += 1
             
