@@ -112,12 +112,6 @@ class Agent:
             hidden_dim=config.communication_hidden_dim
         ).to(self.device)
 
-        self.message_decoder = MessageDecoder(
-            message_dim=self.message_dim,
-            output_dim=encoder_input_dim,
-            hidden_dim=config.communication_hidden_dim[::-1]  # Reverse the hidden dimensions for decoder
-        ).to(self.device)
-
 
         # === Optimizers ===
         self.critic_optim = Adam(
@@ -127,7 +121,7 @@ class Agent:
         )
         self.policy_optim = Adam(
             list(self.policy.parameters()) + 
-            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), 
+            list(self.message_encoder.parameters()), 
             lr=self.lr,  
             weight_decay=1e-4
             )
@@ -174,48 +168,17 @@ class Agent:
             done=done
         )
 
-    def encode_messages(self, message_batch: List[List[torch.Tensor]]) -> List[List[torch.Tensor]]:
-        """
-        message_batch: List of List of input tensors (each tensor = raw message vector)
-        Returns:
-            List of List of encoded messages (each tensor = [message_dim])
-        """
-        encoded_batch = []
-        for raw_msgs in message_batch:
-            encoded_msgs = [self.message_encoder(torch.FloatTensor(msg).to(self.device)) for msg in raw_msgs]
-            encoded_batch.append(encoded_msgs)
-        return encoded_batch
 
-    def get_reconstruction_loss(
-        self,
-        action_batch: torch.Tensor,
-        embedded_state: torch.Tensor,
-        direction_batch: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            raw_input = torch.cat([action_batch, embedded_state, direction_batch], dim=-1)
-        encoded = self.message_encoder(raw_input)
-        decoded = self.message_decoder(encoded)
-        recon_loss = F.mse_loss(decoded, raw_input)
-        return recon_loss
-
-    def get_smoothness_loss(
-        self,
-        encoded_current: torch.Tensor,
-        encoded_next: torch.Tensor
-    ) -> torch.Tensor:
-        return F.mse_loss(encoded_current, encoded_next)
-    
     
     def get_critic_loss(
         self,
         current_state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
-        message_batch: List[List[torch.Tensor]],
+        messages_batch: List[List[torch.Tensor]],
         action_batch: torch.Tensor,
         reward_batch: torch.Tensor,
         next_state_batch: torch.Tensor,
-        next_message_batch: List[List[torch.Tensor]],
+        next_messages_batch: List[List[torch.Tensor]],
         done_batch: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         # Compute next action and Q-values for target update (no gradients)
@@ -228,14 +191,32 @@ class Agent:
         with torch.no_grad():
             # 1. Embed next state
             embedded_next_state = self.embedded_target(next_state_batch)
+            
             # 2. Encode messages
-            encoded_next_messages = self.encode_messages(next_message_batch)
+            raw_next_message = [
+                [
+                    torch.cat([
+                            self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                            torch.FloatTensor(direction).unsqueeze(0).to(self.device),
+                            torch.FloatTensor(action).unsqueeze(0).to(self.device)
+                        ], dim=-1).squeeze(0)
+                        for (state, direction, action) in msg_list
+                ] for msg_list in next_messages_batch
+            ]
+            
+            encoded_next_messages = [
+                [
+                    self.message_encoder(torch.FloatTensor(msg).to(self.device))
+                        for msg in msg_list
+                ] for msg_list in raw_next_message
+            ]
+            
             # Sample next action from the policy (should this be deterministic or stochastic?)
             dist, mu = self.policy.forward(embedded_next_state, direction_batch, encoded_next_messages)
             next_action = dist.rsample()
             log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
             # Compute target Q-values
-            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, next_message_batch, next_action)
+            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, raw_next_message, next_action)
             target_V = torch.min(target_Q1,
                                 target_Q2) - self.alpha.detach() * log_prob
             target_q = reward_batch + ((1 - done_batch) * self.gamma * target_V)
@@ -245,7 +226,19 @@ class Agent:
         # 1. Embed current state
         embedded_state = self.embedded(current_state_batch)
         # 3. Compute Q-values for current state and action
-        q1, q2 = self.critic(embedded_state, direction_batch, message_batch, action_batch)
+    
+        raw_messages = [
+            [
+                torch.cat([
+                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
+                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
+                ], dim=-1).squeeze(0)
+                for (state, direction, action) in msg_list
+            ] for msg_list in messages_batch
+        ]
+        
+        q1, q2 = self.critic(embedded_state, direction_batch, raw_messages, action_batch)
         # Critic loss calculation  
         q1_loss = F.mse_loss(q1, target_q)
         q2_loss = F.mse_loss(q2, target_q)
@@ -257,11 +250,11 @@ class Agent:
         self,
         current_state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
-        message_batch: List[List[torch.Tensor]],
+        messages_batch: List[List[torch.Tensor]],
         action_batch: torch.Tensor,
         reward_batch: torch.Tensor,
         next_state_batch: torch.Tensor,
-        next_message_batch: List[List[torch.Tensor]],
+        next_messages_batch: List[List[torch.Tensor]],
         done_batch: torch.Tensor,
         logger: Optional[Any] = None
     ):
@@ -270,11 +263,11 @@ class Agent:
         critic_loss = self.get_critic_loss(
             current_state_batch,
             direction_batch,
-            message_batch,
+            messages_batch,
             action_batch,
             reward_batch,
             next_state_batch,
-            next_message_batch,
+            next_messages_batch,
             done_batch
         )
         # Total loss
@@ -296,29 +289,42 @@ class Agent:
         self,
         state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
-        message_batch: List[List[torch.Tensor]],
+        messages_batch: List[List[torch.Tensor]],
         logger: Optional[Any] = None
     ):    
         with torch.no_grad():
             # === Embed current state ===
             embedded_state = self.embedded(state_batch).detach()  # [B, feature_dim]
             
-        # === Aggregate messages ===
-        encoded_current_messages = self.encode_messages(message_batch)  # [B, total_msg_dim]
-
         # === Sample action and compute policy loss ===
+        encoded_current_messages = [
+            [
+                self.message_encoder(torch.cat([
+                        self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                        torch.FloatTensor(direction).unsqueeze(0).to(self.device),
+                        torch.FloatTensor(action).unsqueeze(0).to(self.device)
+                    ], dim=-1)).squeeze(0)
+                    for (state, direction, action) in msg_list
+            ] for msg_list in messages_batch
+        ]
         dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
         
         action = dist.rsample()
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         # Compute the policy loss using the critic's Q-values
-        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, message_batch, action)
+        raw_messages = [
+            [
+                torch.cat([
+                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
+                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
+                ], dim=-1).squeeze(0)
+                for (state, direction, action) in msg_list
+            ] for msg_list in messages_batch
+        ]
+        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, raw_messages, action)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
-
-
-        # Reconstruction loss
-        # recon_loss = self.get_reconstruction_loss(action, embedded_state, direction_batch)
 
         # === Total loss ===
         total_loss = actor_loss
@@ -500,108 +506,7 @@ class Agent:
         self.embedded.train()
         
         # self.embedded_target.visualize_head_output(state_tensor)  # Visualize the head output for debugging
-        return action_number, message, raw_message_input
-
-    def debug_step(self, state, direction, messages, action, message, embedded_state, agent, save_path="debug_step"):
-        """
-        Enhanced debug visualization for model step analysis.
-        """
-        self.critic.eval()
-
-        # Convert inputs to tensors
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        direction_tensor = torch.FloatTensor(direction).unsqueeze(0).to(self.device)
-        messages_tensor = torch.FloatTensor(np.array(messages)).unsqueeze(0).to(self.device)
-        # Forward pass
-        with torch.no_grad():
-            q1, q2 = self.critic(embedded_state, direction_tensor, messages_tensor, action)
-            q1 = q1.squeeze().cpu().numpy()
-            q2 = q2.squeeze().cpu().numpy()
-
-        embedded_np = embedded_state.squeeze().cpu().numpy()
-        flat_msg = messages.flatten()
-        
-        # === Evaluate critic over a sweep of test actions ===
-        test_actions = torch.FloatTensor(np.linspace(-4, 4, 10)).unsqueeze(1).to(self.device)  # Shape: (5, 1)
-        repeated_embedded = embedded_state.expand(test_actions.size(0), -1)
-        repeated_dir = direction_tensor.expand(test_actions.size(0), -1)
-        repeated_msgs = messages_tensor.expand(test_actions.size(0), -1)
-
-        with torch.no_grad():
-            q1s, q2s = self.critic(repeated_embedded, repeated_dir, repeated_msgs, test_actions)
-            q_vals = ((q1s + q2s) / 2.0).squeeze().cpu().numpy()
-            action_vals = test_actions.squeeze().cpu().numpy()
-
-
-        # === Start plotting ===
-        fig = plt.figure(figsize=(16, 12))
-        gs = gridspec.GridSpec(4, 3, height_ratios=[1, 1, 0.5, 1])
-
-        # ---- 4 State Channels (Top Left) ----
-        for i in range(4):
-            rgb_img = np.transpose(state[i*3:(i+1)*3], (1, 2, 0))  # Convert (3, H, W) → (H, W, 3)
-            ax = fig.add_subplot(gs[i // 2, i % 2])
-            ax.imshow(rgb_img)
-            ax.set_title(f"State Image {i}", fontsize=10)
-            ax.axis('off')
-        # ---- Action & Direction (Center Text Block) ----
-        ax = fig.add_subplot(gs[2, :])
-        action_text = f"Action Taken: {action}"
-        direction_text = f"Direction: {int(direction[0])}"
-        critic_text = f"Critic Values → Q1: {q1:.2f}, Q2: {q2:.2f}"
-        ax.text(0.05, 0.6, action_text, fontsize=18, fontweight='bold')
-        ax.text(0.05, 0.3, direction_text + " | " + critic_text, fontsize=14)
-        ax.axis('off')
-
-        # ---- Embedded State Features ----
-        ax = fig.add_subplot(gs[3, 0])
-        ax.bar(range(len(embedded_np)), embedded_np)
-        ax.set_title("Embedded State Features", fontsize=12)
-
-        # ---- Messages ----
-        ax = fig.add_subplot(gs[3, 1])
-        ax.bar(range(len(flat_msg)), flat_msg)
-        ax.set_title("Messages Vector", fontsize=12)
-
-        # ---- Raw Message Output ----
-        ax = fig.add_subplot(gs[3, 2])
-        message_np = message.squeeze().detach().cpu().numpy()
-        ax.bar(range(len(message_np)), message_np)
-        ax.set_title("Output Message Vector", fontsize=12)
-        
-        # ---- Q-Value Landscape for Sampled Actions ----
-        ax = fig.add_subplot(gs[2, 2])
-        ax.bar([f"{a:.2f}" for a in action_vals], q_vals)
-        ax.set_title("Q-Value vs. Sampled Actions", fontsize=12)
-        ax.set_xlabel("Action")
-        ax.set_ylabel("Avg Q-Value")
-
-        # Scale y-axis to the min/max of q_vals
-        ax.set_ylim(q_vals.min(), q_vals.max())
-
-        # Final touches
-        fig.subplots_adjust(hspace=0.7, wspace=0.4)
-        plt.suptitle("Debug Step Visualization", fontsize=18, fontweight='bold')
-
-        save_dir = os.path.join(save_path, agent)
-        os.makedirs(save_dir, exist_ok=True)
-
-        # List files and extract numeric filenames like "0.png", "1.png", etc.
-        existing_files = [f for f in os.listdir(save_dir) if f.endswith('.png')]
-        existing_indices = [
-            int(re.match(r"(\d+)\.png", f).group(1))
-            for f in existing_files
-            if re.match(r"(\d+)\.png", f)
-        ]
-        next_index = max(existing_indices, default=-1) + 1  # Start from 0 if none exist
-
-        # Build full file path
-        filename = f"{next_index}.png"
-        full_save_path = os.path.join(save_dir, filename)
-
-        # Save the figure
-        plt.savefig(full_save_path)
-        plt.close(fig)
+        return action_number, message, (state_tensor, direction_tensor, action)
 
     # Save model parameters
     def save(self, filename: str = "agent_checkpoint.pth"):
@@ -618,7 +523,6 @@ class Agent:
             'critic_state_dict': self.critic.state_dict(),
             'critic_target_state_dict': self.critic_target.state_dict(),
             'message_encoder_state_dict': self.message_encoder.state_dict(),
-            'message_decoder_state_dict': self.message_decoder.state_dict(),
 
             # === Optimizers ===
             'critic_optimizer_state_dict': self.critic_optim.state_dict(),
@@ -646,7 +550,6 @@ class Agent:
 
         torch.save(checkpoint, save_path)
 
-
     # Load model parameters
     def load(self, path: str, evaluate: bool = False):
         print(f"Loading models from {path}")
@@ -659,7 +562,6 @@ class Agent:
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
         self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
-        self.message_decoder.load_state_dict(checkpoint['message_decoder_state_dict'])
 
         # === Load optimizers ===
         self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
@@ -683,7 +585,7 @@ class Agent:
             self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
-        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder, self.message_decoder]:
+        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder]:
             net.to(self.device)
             net.train()
 

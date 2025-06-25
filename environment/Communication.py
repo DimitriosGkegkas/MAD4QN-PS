@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from utils import position_to_road, roads_to_direction, road_to_communication
 
 
@@ -30,11 +30,11 @@ class CommunicationWrapper(gym.ObservationWrapper):
         observation, reward, terminated, truncated, info = self.env.reset(**kwargs)
         return self.observation(observation, messages=None), reward, terminated, truncated, info
 
-    def step(self, action, messages: Optional[Dict[str, np.ndarray]] = None, raw_messages: Optional[Dict[str, np.ndarray]] = None):
+    def step(self, action, messages: Optional[Dict[str, np.ndarray]] = None, raw_messages: Optional[Dict[str, Tuple]] = None):
         observation, reward, terminated, truncated, info = self.env.step(action)
         return self.observation(observation, messages, raw_messages), reward, terminated, truncated, info
 
-    def observation(self, obs: Dict[str, Any], messages: Optional[Dict[str, np.ndarray]], raw_messages: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, Any]:
+    def observation(self, obs: Dict[str, Any], messages: Optional[Dict[str, np.ndarray]], raw_messages: Optional[Dict[str, Tuple]] = None) -> Dict[str, Any]:
         """
         Adds an aggregated communication message to each agent's observation tuple.
         Input shape: (obs_data, direction_vector)
@@ -44,10 +44,13 @@ class CommunicationWrapper(gym.ObservationWrapper):
             messages = {agent: np.zeros(self.message_dim) for agent in self.agent_names}
             
         if raw_messages is None:
-            raw_messages = {agent: np.zeros(self.message_raw_dim) for agent in self.agent_names}
+            raw_messages = {agent: None for agent in self.agent_names}
+            
+        communication_messages = self.create_communication_message(messages)
+        raw_communication_messages = self.create_communication_message(raw_messages)
 
         return {
-            agent: (*obs[agent], self.create_communication_message(messages), self.create_communication_message(raw_messages))
+            agent: (*obs[agent], communication_messages, raw_communication_messages)
             if agent in self.agent_names and isinstance(obs[agent], tuple)
             else obs[agent]
             for agent in obs
