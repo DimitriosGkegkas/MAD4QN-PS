@@ -199,7 +199,6 @@ class Agent:
         with torch.no_grad():
             # 1. Embed next state
             embedded_next_state = self.embedded_target(next_state_batch)
-            
             # 2. Encode messages
             raw_next_message, encoded_next_messages = self.get_messages(next_messages_batch)
             
