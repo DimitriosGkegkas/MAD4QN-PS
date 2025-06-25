@@ -131,7 +131,7 @@ class Agent:
             self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
             self.log_alpha.requires_grad = True
             # set target entropy to -|A|
-            self.target_entropy = -self.action_dim
+            self.target_entropy = -0.4*self.action_dim
             self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
                                                     lr=self.lr,)
             self.min_entropy = -0.1*self.action_dim  # Minimum entropy for the target entropy
@@ -529,33 +529,48 @@ class Agent:
         checkpoint = torch.load(path, map_location=self.device)
 
         # === Load model weights ===
-        self.embedded.load_state_dict(checkpoint['embedded_state_dict'])
-        self.embedded_target.load_state_dict(checkpoint['embedded_target_state_dict'])
-        self.policy.load_state_dict(checkpoint['policy_state_dict'])
-        self.critic.load_state_dict(checkpoint['critic_state_dict'])
-        self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
-        self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
+        try:
+            self.embedded.load_state_dict(checkpoint['embedded_state_dict'])
+            self.embedded_target.load_state_dict(checkpoint['embedded_target_state_dict'])
+        except Exception as e:
+            print(f"Error loading embedded networks: {e}")
+        
+        try:
+            self.policy.load_state_dict(checkpoint['policy_state_dict'])
+        except Exception as e:
+            print(f"Error loading policy network: {e}")
+        try:
+            self.critic.load_state_dict(checkpoint['critic_state_dict'])
+            self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
+        except Exception as e:
+            print(f"Error loading critic networks: {e}")
+        try:
+            self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
+        except Exception as e:
+            print(f"Error loading message encoder: {e}")
 
         # === Load optimizers ===
-        self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
-        self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
-        # === Override learning rates ===
-        for group in self.critic_optim.param_groups:
-            group["lr"] = self.lr
+        try:
+            self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
+            self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
+            # === Override learning rates ===
+            for group in self.critic_optim.param_groups:
+                group["lr"] = self.lr
 
-        for group in self.policy_optim.param_groups:
-            group["lr"] = self.lr
+            for group in self.policy_optim.param_groups:
+                group["lr"] = self.lr
+        except Exception as e:
+            print(f"Error loading optimizers: {e}")
 
 
-
-        # === Load alpha/entropy if available ===
-        if checkpoint.get('automatic_entropy_tuning', False):
-            self.automatic_entropy_tuning = True
-            # self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
-            self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
-            self.log_alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
-            self.log_alpha = torch.tensor(self.log_alpha).to(self.device)
-            self.log_alpha.requires_grad = True
+        # # === Load alpha/entropy if available ===
+        # if checkpoint.get('automatic_entropy_tuning', False):
+        #     self.automatic_entropy_tuning = True
+        #     # self.target_entropy = checkpoint.get('target_entropy', self.target_entropy)
+        #     self.log_alpha = checkpoint.get('log_alpha', self.log_alpha)
+        #     self.log_alpha_optimizer.load_state_dict(checkpoint['alpha_optimizer_state_dict'])
+        #     self.log_alpha = torch.tensor(self.log_alpha).to(self.device)
+        #     self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
         for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder]:
