@@ -1,5 +1,5 @@
 total_steps: 1000000
-max_training_steps: 500
+max_training_steps: 300
 algorithm_identifier: ${algorithm_identifier}
 tensorboard: ${shared.tensorboard}
 evaluate: ${shared.evaluate}

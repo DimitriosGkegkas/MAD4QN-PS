@@ -43,7 +43,7 @@ class Scenarios(gym.Wrapper):
         self.evaluation_scenario = scenario_index
         
     def _sample_scenario_index(self):
-        agent_count = 2
+        agent_count = 3
         
         # if self.n_episodes < 1:
         #     agent_count = 1
