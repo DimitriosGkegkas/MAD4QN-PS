@@ -1,3 +1,4 @@
+from curses import raw
 from datetime import datetime
 import os
 from turtle import forward
@@ -111,11 +112,18 @@ class Agent:
             message_dim=self.message_dim,
             hidden_dim=config.communication_hidden_dim
         ).to(self.device)
+        
+        self.message_decoder = MessageDecoder(
+            message_dim=self.message_dim,
+            output_dim=encoder_input_dim,
+            hidden_dim=config.communication_hidden_dim
+        ).to(self.device)
 
 
         # === Optimizers ===
         self.critic_optim = Adam(
-            list(self.critic.parameters()) + list(self.embedded.parameters()),
+            list(self.critic.parameters()) +
+            list(self.embedded.parameters()),
             lr=self.lr,
             weight_decay=1e-4
         )
@@ -193,23 +201,7 @@ class Agent:
             embedded_next_state = self.embedded_target(next_state_batch)
             
             # 2. Encode messages
-            raw_next_message = [
-                [
-                    torch.cat([
-                            self.embedded_target(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
-                            torch.FloatTensor(direction).unsqueeze(0).to(self.device),
-                            torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                        ], dim=-1).squeeze(0).detach()
-                        for (state, direction, action) in msg_list
-                ] for msg_list in next_messages_batch
-            ]
-            
-            encoded_next_messages = [
-                [
-                    self.message_encoder(torch.FloatTensor(msg).to(self.device)).detach()
-                        for msg in msg_list
-                ] for msg_list in raw_next_message
-            ]
+            raw_next_message, encoded_next_messages = self.get_messages(next_messages_batch)
             
             # Sample next action from the policy (should this be deterministic or stochastic?)
             dist, mu = self.policy.forward(embedded_next_state, direction_batch, encoded_next_messages)
@@ -226,16 +218,8 @@ class Agent:
         embedded_state = self.embedded(current_state_batch)
         # 3. Compute Q-values for current state and action
     
-        raw_current_messages = [
-            [
-                torch.cat([
-                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
-                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
-                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                ], dim=-1).squeeze(0)
-                for (state, direction, action) in msg_list
-            ] for msg_list in messages_batch
-        ]
+        raw_current_messages, _ = self.get_messages(messages_batch, encode=False)
+
         
         q1, q2 = self.critic(embedded_state, direction_batch, raw_current_messages, action_batch)
         # Critic loss calculation  
@@ -254,6 +238,50 @@ class Agent:
         logger.log_scalar("loss/critic", critic_loss.item(), self.updates)
         logger.log_scalar("lr/critic", self.critic_optim.param_groups[0]["lr"], self.updates)
 
+
+    def get_messages(self, messages_batch: List[List[torch.Tensor]], encode = True) -> Tuple[List[List[torch.Tensor]], List[List[torch.Tensor]]]:
+        # === STEP 1: Flatten and batch embed ===
+        flat_data = [
+            (i, j, state, direction, action)
+            for i, msg_list in enumerate(messages_batch)
+            for j, (state, direction, action) in enumerate(msg_list)
+        ]
+
+        # Batch all states
+        states = torch.FloatTensor([state for (_, _, state, _, _) in flat_data]).to(self.device)
+        embedded_states = self.embedded(states)  # shape: (N, D1)
+
+        # Combine with direction and action
+        directions = torch.FloatTensor([direction for (_, _, _, direction, _) in flat_data]).to(self.device)  # shape: (N, D2)
+        actions = torch.FloatTensor([action for (_, _, _, _, action) in flat_data]).to(self.device)          # shape: (N, D3)
+
+        # Concatenate all components
+        raw_message_tensor = torch.cat([embedded_states, directions, actions], dim=-1)  # shape: (N, D1+D2+D3)
+
+        # Store index to reconstruct
+        indices = [(i, j) for (i, j, _, _, _) in flat_data]
+        num_messages = len(messages_batch)
+        raw_current_message = [[] for _ in range(num_messages)]
+        
+        if not encode:
+            # If no encoding is needed, return the raw messages directly
+            for (i, j), raw_vec in zip(indices, raw_message_tensor):
+                raw_current_message[i].append(raw_vec)
+                
+            return raw_current_message, None
+
+        # === STEP 2: Batch pass through message encoder ===
+        encoded_tensor = self.message_encoder(raw_message_tensor)  # shape: (N, D4)
+
+        # === STEP 3: Reconstruct both raw_current_message and encoded_current_messages ===
+        encoded_current_messages = [[] for _ in range(num_messages)]
+
+        for (i, j), raw_vec, encoded_vec in zip(indices, raw_message_tensor, encoded_tensor):
+            raw_current_message[i].append(raw_vec)
+            encoded_current_messages[i].append(encoded_vec)
+            
+        return raw_current_message, encoded_current_messages
+
     def train_actor(
         self,
         state_batch: torch.Tensor,
@@ -271,22 +299,7 @@ class Agent:
             embedded_state = self.embedded(state_batch).detach()  # [B, feature_dim]
             
         # === Sample action and compute policy loss ===
-        raw_current_message = [
-            [
-                torch.cat([
-                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
-                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
-                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                ], dim=-1).squeeze(0).detach()
-                for (state, direction, action) in msg_list
-            ] for msg_list in messages_batch
-        ]          
-        encoded_current_messages = [
-            [
-                self.message_encoder(torch.FloatTensor(msg).to(self.device))
-                    for msg in msg_list
-            ] for msg_list in raw_current_message
-        ]
+        raw_current_message, encoded_current_messages = self.get_messages(messages_batch)
         dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
         
         action = dist.rsample()
@@ -529,39 +542,37 @@ class Agent:
         checkpoint = torch.load(path, map_location=self.device)
 
         # === Load model weights ===
-        try:
-            self.embedded.load_state_dict(checkpoint['embedded_state_dict'])
-            self.embedded_target.load_state_dict(checkpoint['embedded_target_state_dict'])
-        except Exception as e:
-            print(f"Error loading embedded networks: {e}")
+        self.embedded.load_state_dict(checkpoint['embedded_state_dict'])
+        self.embedded_target.load_state_dict(checkpoint['embedded_target_state_dict'])
+        self.policy.load_state_dict(checkpoint['policy_state_dict'])
+        self.critic.load_state_dict(checkpoint['critic_state_dict'])
+        self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
+        self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
+        self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
         
-        try:
-            self.policy.load_state_dict(checkpoint['policy_state_dict'])
-        except Exception as e:
-            print(f"Error loading policy network: {e}")
-        try:
-            self.critic.load_state_dict(checkpoint['critic_state_dict'])
-            self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
-        except Exception as e:
-            print(f"Error loading critic networks: {e}")
-        try:
-            self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
-        except Exception as e:
-            print(f"Error loading message encoder: {e}")
+        # Filter and load policy optimizer state safely
+        loaded_policy_optim_state = checkpoint['policy_optimizer_state_dict']
 
-        # === Load optimizers ===
-        try:
-            self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
-            self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
-            # === Override learning rates ===
-            for group in self.critic_optim.param_groups:
-                group["lr"] = self.lr
+        # Create current optimizer param ID map
+        current_param_ids = {id(p): p for group in self.policy_optim.param_groups for p in group['params']}
 
-            for group in self.policy_optim.param_groups:
-                group["lr"] = self.lr
-        except Exception as e:
-            print(f"Error loading optimizers: {e}")
+        # Filter the state to match only existing parameter IDs
+        filtered_state = {
+            k: v for k, v in loaded_policy_optim_state['state'].items()
+            if k in current_param_ids
+        }
 
+        # Replace the 'state' field with filtered version
+        loaded_policy_optim_state['state'] = filtered_state
+
+        # Replace param_groups to avoid mismatch
+        loaded_policy_optim_state['param_groups'] = self.policy_optim.state_dict()['param_groups']
+
+        # Load filtered state dict
+        self.policy_optim.load_state_dict(loaded_policy_optim_state)
+
+        for group in self.policy_optim.param_groups:
+            group["lr"] = self.lr
 
         # # === Load alpha/entropy if available ===
         # if checkpoint.get('automatic_entropy_tuning', False):
