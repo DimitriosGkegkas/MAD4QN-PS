@@ -88,7 +88,7 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
 
 
 
-LOG_SIG_MAX = 2
+LOG_SIG_MAX = 1
 LOG_SIG_MIN = -5
 epsilon = 1e-6
 
