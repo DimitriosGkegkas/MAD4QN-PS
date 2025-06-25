@@ -191,7 +191,6 @@ class Agent:
         with torch.no_grad():
             # 1. Embed next state
             embedded_next_state = self.embedded_target(next_state_batch)
-            
             # 2. Encode messages
             raw_next_message = [
                 [
@@ -203,10 +202,10 @@ class Agent:
                         for (state, direction, action) in msg_list
                 ] for msg_list in next_messages_batch
             ]
-            
+
             encoded_next_messages = [
                 [
-                    self.message_encoder(torch.FloatTensor(msg).to(self.device)).detach()
+                    self.message_encoder(msg).detach()
                         for msg in msg_list
                 ] for msg_list in raw_next_message
             ]
@@ -283,7 +282,7 @@ class Agent:
         ]          
         encoded_current_messages = [
             [
-                self.message_encoder(torch.FloatTensor(msg).to(self.device))
+                self.message_encoder(msg)
                     for msg in msg_list
             ] for msg_list in raw_current_message
         ]
