@@ -167,10 +167,8 @@ class Agent:
             next_messages=next_messages,
             done=done
         )
-
-
-    
-    def get_critic_loss(
+        
+    def train_critic(
         self,
         current_state_batch: torch.Tensor,
         direction_batch: torch.Tensor,
@@ -179,14 +177,16 @@ class Agent:
         reward_batch: torch.Tensor,
         next_state_batch: torch.Tensor,
         next_messages_batch: List[List[torch.Tensor]],
-        done_batch: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        # Compute next action and Q-values for target update (no gradients)
+        done_batch: torch.Tensor,
+        logger: Optional[Any] = None
+    ):
+
         self.critic_target.eval()
         self.embedded_target.eval()
+        self.message_encoder.eval()
         self.policy.eval()
-        self.critic.eval()
-        self.embedded.eval()
+        self.critic.train()
+        self.embedded.train()
         
         with torch.no_grad():
             # 1. Embed next state
@@ -196,17 +196,17 @@ class Agent:
             raw_next_message = [
                 [
                     torch.cat([
-                            self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                            self.embedded_target(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
                             torch.FloatTensor(direction).unsqueeze(0).to(self.device),
                             torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                        ], dim=-1).squeeze(0)
+                        ], dim=-1).squeeze(0).detach()
                         for (state, direction, action) in msg_list
                 ] for msg_list in next_messages_batch
             ]
             
             encoded_next_messages = [
                 [
-                    self.message_encoder(torch.FloatTensor(msg).to(self.device))
+                    self.message_encoder(torch.FloatTensor(msg).to(self.device)).detach()
                         for msg in msg_list
                 ] for msg_list in raw_next_message
             ]
@@ -222,12 +222,11 @@ class Agent:
             target_q = reward_batch + ((1 - done_batch) * self.gamma * target_V)
             target_q = target_q.detach()
             
-            
         # 1. Embed current state
         embedded_state = self.embedded(current_state_batch)
         # 3. Compute Q-values for current state and action
     
-        raw_messages = [
+        raw_current_messages = [
             [
                 torch.cat([
                     self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
@@ -238,45 +237,15 @@ class Agent:
             ] for msg_list in messages_batch
         ]
         
-        q1, q2 = self.critic(embedded_state, direction_batch, raw_messages, action_batch)
+        q1, q2 = self.critic(embedded_state, direction_batch, raw_current_messages, action_batch)
         # Critic loss calculation  
         q1_loss = F.mse_loss(q1, target_q)
         q2_loss = F.mse_loss(q2, target_q)
         critic_loss = q1_loss + q2_loss
         
-        return critic_loss
-        
-    def train_critic(
-        self,
-        current_state_batch: torch.Tensor,
-        direction_batch: torch.Tensor,
-        messages_batch: List[List[torch.Tensor]],
-        action_batch: torch.Tensor,
-        reward_batch: torch.Tensor,
-        next_state_batch: torch.Tensor,
-        next_messages_batch: List[List[torch.Tensor]],
-        done_batch: torch.Tensor,
-        logger: Optional[Any] = None
-    ):
-
-        # Critic loss
-        critic_loss = self.get_critic_loss(
-            current_state_batch,
-            direction_batch,
-            messages_batch,
-            action_batch,
-            reward_batch,
-            next_state_batch,
-            next_messages_batch,
-            done_batch
-        )
-        # Total loss
-        total_loss = critic_loss 
-        
-
         # Optimize Critic Network
         self.critic_optim.zero_grad()  # Clear previous gradients
-        total_loss.backward()  # Compute gradients
+        critic_loss.backward()  # Compute gradients
         self.critic_optim.step() # Update the parameters based on gradients
 
         if logger is None:
@@ -292,37 +261,41 @@ class Agent:
         messages_batch: List[List[torch.Tensor]],
         logger: Optional[Any] = None
     ):    
+        
+        self.message_encoder.train()
+        self.policy.train()
+        self.critic.eval()
+        self.embedded.eval()
         with torch.no_grad():
             # === Embed current state ===
             embedded_state = self.embedded(state_batch).detach()  # [B, feature_dim]
             
         # === Sample action and compute policy loss ===
+        raw_current_message = [
+            [
+                torch.cat([
+                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
+                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
+                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
+                ], dim=-1).squeeze(0).detach()
+                for (state, direction, action) in msg_list
+            ] for msg_list in messages_batch
+        ]          
         encoded_current_messages = [
             [
-                self.message_encoder(torch.cat([
-                        self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
-                        torch.FloatTensor(direction).unsqueeze(0).to(self.device),
-                        torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                    ], dim=-1)).squeeze(0)
-                    for (state, direction, action) in msg_list
-            ] for msg_list in messages_batch
+                self.message_encoder(torch.FloatTensor(msg).to(self.device))
+                    for msg in msg_list
+            ] for msg_list in raw_current_message
         ]
         dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
         
         action = dist.rsample()
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         # Compute the policy loss using the critic's Q-values
-        raw_messages = [
-            [
-                torch.cat([
-                    self.embedded(torch.FloatTensor(state).unsqueeze(0).to(self.device)),
-                    torch.FloatTensor(direction).unsqueeze(0).to(self.device),
-                    torch.FloatTensor(action).unsqueeze(0).to(self.device)
-                ], dim=-1).squeeze(0)
-                for (state, direction, action) in msg_list
-            ] for msg_list in messages_batch
-        ]
-        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, raw_messages, action)
+          
+    
+            
+        actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, raw_current_message, action)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
 
@@ -506,7 +479,7 @@ class Agent:
         self.embedded.train()
         
         # self.embedded_target.visualize_head_output(state_tensor)  # Visualize the head output for debugging
-        return action_number, message, (state_tensor, direction_tensor, action)
+        return action_number, message, (state_tensor.detach().cpu().numpy()[0], direction_tensor.detach().cpu().numpy()[0], action_number)
 
     # Save model parameters
     def save(self, filename: str = "agent_checkpoint.pth"):
