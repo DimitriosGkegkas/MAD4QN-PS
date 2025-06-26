@@ -323,6 +323,6 @@ scenarios_per_number_of_agents = {
 # Get weights based on the length of each scenario
 # scenario_weights = [len(all_scenarios[scenario_id]) for scenario_id in scenario_ids]
 scenario_weights_per_number_of_agents = {
-    i: [len(all_scenarios[scenario_id]) for scenario_id in scenarios_per_number_of_agents[i]]
+    i: [len(all_scenarios[scenario_id])**2 for scenario_id in scenarios_per_number_of_agents[i]]
     for i in scenarios_per_number_of_agents
 }
