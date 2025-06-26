@@ -1,6 +1,6 @@
 import gymnasium as gym
 from smarts.core.scenario import Scenario as SMARTSScenario  # avoid name conflict
-from environment.help_scenario import get_scenario_missions, scenarios_per_number_of_agents
+from environment.help_scenario import get_scenario_missions, scenarios_per_number_of_agents, scenario_weights_per_number_of_agents
 import random
 import numpy as np
 from typing import Any
@@ -43,18 +43,14 @@ class Scenarios(gym.Wrapper):
         self.evaluation_scenario = scenario_index
         
     def _sample_scenario_index(self):
-        agent_count = 3
+        agent_count = 4 
         
-        # if self.n_episodes < 1:
-        #     agent_count = 1
-        # elif self.n_episodes < 5:
-        #     agent_count = 2
-        # elif self.n_episodes < 10:
-        #     agent_count = 3
-        # else:
-        #     agent_count = 4
-            
-        scenario_id = random.choice(scenarios_per_number_of_agents[agent_count])
+        # Extract possible scenario IDs for the current agent count
+        scenario_ids = scenarios_per_number_of_agents[agent_count]
+        weights = scenario_weights_per_number_of_agents[agent_count]
+
+        # Choose a scenario_id using the weights
+        scenario_id = random.choices(scenario_ids, weights=weights, k=1)[0]
         print(f"Scenario {scenario_id} selected for episode {self.n_episodes}")
         return scenario_id
     

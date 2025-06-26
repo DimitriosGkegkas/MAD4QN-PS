@@ -137,7 +137,7 @@ class Agent:
             self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
             self.log_alpha.requires_grad = True
             # set target entropy to -|A|
-            self.target_entropy = -0.4*self.action_dim
+            self.target_entropy = config.target_entropy
             self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
                                                     lr=self.lr,)
             self.min_entropy = -0.1*self.action_dim  # Minimum entropy for the target entropy
@@ -231,7 +231,7 @@ class Agent:
             # 2. Encode messages
             encoded_next_messages = self.encode_messages(next_message_batch)
             # Sample next action from the policy (should this be deterministic or stochastic?)
-            dist, mu = self.policy.forward(embedded_next_state, direction_batch, encoded_next_messages)
+            dist, _, _ = self.policy.forward(embedded_next_state, direction_batch, encoded_next_messages)
             next_action = dist.rsample()
             log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
             # Compute target Q-values
@@ -307,7 +307,7 @@ class Agent:
         encoded_current_messages = self.encode_messages(message_batch)  # [B, total_msg_dim]
 
         # === Sample action and compute policy loss ===
-        dist, mu = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
+        dist, mu, std = self.policy.forward(embedded_state, direction_batch, encoded_current_messages)
         
         action = dist.rsample()
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
@@ -350,6 +350,10 @@ class Agent:
         logger.log_scalar("policy/log_prob_mean", log_prob.mean().item(), self.updates)
         logger.log_scalar("policy/log_prob_min", log_prob.min().item(), self.updates)
         logger.log_scalar("policy/log_prob_max", log_prob.max().item(), self.updates)
+        
+        logger.log_scalar("policy/log_prob_mean", std.mean().item(), self.updates)
+        logger.log_scalar("policy/log_prob_min", std.min().item(), self.updates)
+        logger.log_scalar("policy/log_prob_max", std.max().item(), self.updates)
 
         logger.log_scalar("policy/action_mean", action.mean(), self.updates)
         logger.log_scalar("policy/action_std", action.std(), self.updates)
@@ -472,7 +476,7 @@ class Agent:
         with torch.no_grad():
             # === Embed own state ===
             embedded_state = self.embedded(state_tensor)  # shape: [1, D]
-            dist, mu = self.policy.forward(embedded_state, direction_tensor, messages_tensor)
+            dist, mu, _ = self.policy.forward(embedded_state, direction_tensor, messages_tensor)
 
             # === Choose action ===
             if evaluate:

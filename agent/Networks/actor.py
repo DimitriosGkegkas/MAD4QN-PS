@@ -140,6 +140,6 @@ class ActorNetwork(nn.Module):
         
         std = log_std.exp()
         dist = SquashedNormal(mu, std)
-        return dist, mu
+        return dist, mu, std
     
 

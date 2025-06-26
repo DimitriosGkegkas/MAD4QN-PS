@@ -319,3 +319,10 @@ scenarios_per_number_of_agents = {
     i: [j for j, scenario in enumerate(all_scenarios) if len(scenario) <= i]
     for i in range(1, 1+ max(all_scenarios_to_number_of_agents)) 
 }
+
+# Get weights based on the length of each scenario
+# scenario_weights = [len(all_scenarios[scenario_id]) for scenario_id in scenario_ids]
+scenario_weights_per_number_of_agents = {
+    i: [len(all_scenarios[scenario_id]) for scenario_id in scenarios_per_number_of_agents[i]]
+    for i in scenarios_per_number_of_agents
+}
