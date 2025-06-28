@@ -2,7 +2,7 @@ communication_hidden_dim: [32, 16]
 critic_hidden_dim: [128, 128, 32]
 actor_hidden_dim: [128, 128, 32]
 
-input_dim: [12, 32, 32]
+input_dim: [12, 128, 128]
 action_dim: 1
 direction_dim: 4
 feature_dim: 64

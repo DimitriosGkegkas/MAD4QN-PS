@@ -125,13 +125,14 @@ class Agent:
             list(self.critic.parameters()) +
             list(self.embedded.parameters()),
             lr=self.lr,
-            weight_decay=1e-4
+            betas=(0.9, 0.999),
         )
         self.policy_optim = Adam(
             list(self.policy.parameters()) + 
             list(self.message_encoder.parameters()), 
             lr=self.lr,  
-            weight_decay=1e-4
+            betas=(0.9, 0.999),
+            # weight_decay=0.0001  # L2 regularization
             )
 
         # === Entropy tuning ===

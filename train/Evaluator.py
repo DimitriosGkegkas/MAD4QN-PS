@@ -62,18 +62,32 @@ class Evaluator:
     def _episode_eval(self, scenario_ids: List[int]) -> List[float]:
         current_state, terminate, truncated, reward, infos = self.env_manager.reset(scenario_ids)
         ep_steps = 0
-        scores = [0.0 for _ in current_state]
+        
+        # Initialize scores: one list per scenario, one score per agent in that scenario
+        scores = [{} for _ in reward]  # One dict per scenario
+
 
         while True:
             action, next_messages, _ = self.agent_manager.action(current_state, terminate, truncated)
             current_state, reward, terminate, truncated, infos, _ = self.env_manager.step(action, next_messages)
             ep_steps += 1
 
-            avg_rewards = self._average_rewards(reward)
-            scores = [s + r for s, r in zip(scores, avg_rewards)]
+            for scenario_idx, agent_rewards in enumerate(reward):
+                scenario_scores = scores[scenario_idx]
+                for agent_id, r in agent_rewards.items():
+                    if agent_id not in scenario_scores:
+                        scenario_scores[agent_id] = 0.0
+                    scenario_scores[agent_id] += r
+                    
             if self.episode_manager.is_done(current_state, reward, terminate, truncated, infos) or ep_steps > self.max_evaluation_steps:
                 break
-        return scores
+        # Compute average reward per scenario (average across agents in that scenario)
+        scenario_averages = [
+            sum(agent_scores.values()) / len(agent_scores) if agent_scores else 0.0
+            for agent_scores in scores
+        ]
+
+        return scenario_averages
         
         
     def envision(self, scenario_id: int) -> None:
