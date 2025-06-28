@@ -66,9 +66,13 @@ class BaseTrainer:
         for key, value in stats.items():
             self.log_scalar(tag=f"episode/{key}", value=value, step=episode)
 
-    def after_evaluation(self, rewards, scenario_ids: List[int], episode: int, n_steps: int) -> None:
+    def after_evaluation(self, rewards, crashed, scenario_ids: List[int], episode: int, n_steps: int) -> None:
         print(f"\nEvaluation complete for episode {episode} with rewards: {np.mean(rewards)}")
         self.log_scalar("reward/eval", np.mean(rewards), n_steps)
+        
+        # get the trues of the crashed list and devide by the total number of scenarios
+        number_of_crashed = sum(crashed)
+        self.log_scalar("reward/crashed", 100 * number_of_crashed / len(crashed), n_steps)
         self.log_histogram("reward/eval_distribution", rewards, episode)
         
         # Step 1: Group rewards by agent count
