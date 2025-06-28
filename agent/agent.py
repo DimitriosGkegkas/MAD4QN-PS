@@ -123,13 +123,13 @@ class Agent:
         self.critic_optim = Adam(
             list(self.critic.parameters()) + list(self.embedded.parameters()),
             lr=self.lr,
-            weight_decay=1e-4
+            betas=(0.9, 0.999)
         )
         self.policy_optim = Adam(
             list(self.policy.parameters()) + 
             list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), 
             lr=self.lr,  
-            weight_decay=1e-4
+            betas=(0.9, 0.999),
             )
 
         # === Entropy tuning ===
@@ -185,26 +185,6 @@ class Agent:
             encoded_msgs = [self.message_encoder(torch.FloatTensor(msg).to(self.device)) for msg in raw_msgs]
             encoded_batch.append(encoded_msgs)
         return encoded_batch
-
-    def get_reconstruction_loss(
-        self,
-        action_batch: torch.Tensor,
-        embedded_state: torch.Tensor,
-        direction_batch: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            raw_input = torch.cat([action_batch, embedded_state, direction_batch], dim=-1)
-        encoded = self.message_encoder(raw_input)
-        decoded = self.message_decoder(encoded)
-        recon_loss = F.mse_loss(decoded, raw_input)
-        return recon_loss
-
-    def get_smoothness_loss(
-        self,
-        encoded_current: torch.Tensor,
-        encoded_next: torch.Tensor
-    ) -> torch.Tensor:
-        return F.mse_loss(encoded_current, encoded_next)
     
     
     def get_critic_loss(
@@ -315,10 +295,6 @@ class Agent:
         actor_Q1, actor_Q2  = self.critic(embedded_state, direction_batch, message_batch, action)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
-
-
-        # Reconstruction loss
-        # recon_loss = self.get_reconstruction_loss(action, embedded_state, direction_batch)
 
         # === Total loss ===
         total_loss = actor_loss
