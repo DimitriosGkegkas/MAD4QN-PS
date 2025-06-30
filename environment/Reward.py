@@ -59,7 +59,7 @@ class Reward(gym.Wrapper):
         for agent_name in self.agent_names:
             if agent_name in obs.keys():
                 if obs[agent_name]["events"]["collisions"] or obs[agent_name]["events"]["off_route"] \
-                    or obs[agent_name]["events"]["off_road"] or obs[agent_name]["events"]["on_shoulder"] \
+                    or obs[agent_name]["events"]["off_road"] \
                     or obs[agent_name]["events"]["wrong_way"]:
                     truncated["__all__"] = True
                     return truncated
@@ -87,7 +87,6 @@ class Reward(gym.Wrapper):
                 elif obs[agent_name]["events"]["collisions"] \
                     or obs[agent_name]["events"]["off_route"] \
                     or obs[agent_name]["events"]["off_road"] \
-                    or obs[agent_name]["events"]["on_shoulder"] \
                     or obs[agent_name]["events"]["wrong_way"]:
                     reward[agent_name] -= 10 * self.k
                 else:

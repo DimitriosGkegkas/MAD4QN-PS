@@ -33,7 +33,7 @@ class EnvironmentManager:
                     collision=True,
                     off_road=True,
                     off_route=True,
-                    on_shoulder=True,
+                    # on_shoulder=True,
                     wrong_way=True,
                 )
             ),

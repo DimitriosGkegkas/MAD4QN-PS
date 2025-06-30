@@ -101,7 +101,6 @@ class StatisticsCollector:
             if infos[agent_id]['env_obs'].events.collisions or \
                 infos[agent_id]['env_obs'].events.off_road or \
                 infos[agent_id]['env_obs'].events.off_route or \
-                infos[agent_id]['env_obs'].events.on_shoulder or \
                 infos[agent_id]['env_obs'].events.wrong_way:
                 self.collector.mark_agent_crashed(agent_id, scenario_id)
 

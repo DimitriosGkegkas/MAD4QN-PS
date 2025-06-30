@@ -215,7 +215,12 @@ class Agent:
             next_action = dist.rsample()
             log_prob = dist.log_prob(next_action).sum(-1, keepdim=True)
             # Compute target Q-values
-            target_Q1, target_Q2 = self.critic_target(embedded_next_state, direction_batch, next_message_batch, next_action)
+            target_Q1, target_Q2 = self.critic_target(
+                embedded_next_state, 
+                direction_batch, 
+                next_message_batch, 
+                next_action
+                )
             target_V = torch.min(target_Q1,
                                 target_Q2) - self.alpha.detach() * log_prob
             target_q = reward_batch + ((1 - done_batch) * self.gamma * target_V)
@@ -467,9 +472,10 @@ class Agent:
             raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
             message = self.message_encoder(raw_message_input)
             
-            # if(agent == "Agent-0"):
+            # print(agent)
+            # if(agent == "Agent-01"):
             #     # Debugging visualization
-            #     self.debug_step(state, direction, messages, action, message, embedded_state, agent, save_path="debug_step_1")
+            # self.debug_step(state, direction, raw_messages, action, message, embedded_state, agent, save_path="debug_step_1")
 
             action_number = action.detach().cpu().numpy()[0]  # Convert to numpy for easier handling
             # make sure message and raw_message_input are of 1-D
@@ -494,18 +500,17 @@ class Agent:
         messages_tensor = torch.FloatTensor(np.array(messages)).unsqueeze(0).to(self.device)
         # Forward pass
         with torch.no_grad():
-            q1, q2 = self.critic(embedded_state, direction_tensor, messages_tensor, action)
+            q1, q2 = self.critic(embedded_state, direction_tensor, np.array([messages]), action)
             q1 = q1.squeeze().cpu().numpy()
             q2 = q2.squeeze().cpu().numpy()
 
         embedded_np = embedded_state.squeeze().cpu().numpy()
-        flat_msg = messages.flatten()
-        
+
         # === Evaluate critic over a sweep of test actions ===
         test_actions = torch.FloatTensor(np.linspace(-4, 4, 10)).unsqueeze(1).to(self.device)  # Shape: (5, 1)
         repeated_embedded = embedded_state.expand(test_actions.size(0), -1)
         repeated_dir = direction_tensor.expand(test_actions.size(0), -1)
-        repeated_msgs = messages_tensor.expand(test_actions.size(0), -1)
+        repeated_msgs =  np.array([messages] * test_actions.size(0))
 
         with torch.no_grad():
             q1s, q2s = self.critic(repeated_embedded, repeated_dir, repeated_msgs, test_actions)
@@ -538,10 +543,7 @@ class Agent:
         ax.bar(range(len(embedded_np)), embedded_np)
         ax.set_title("Embedded State Features", fontsize=12)
 
-        # ---- Messages ----
-        ax = fig.add_subplot(gs[3, 1])
-        ax.bar(range(len(flat_msg)), flat_msg)
-        ax.set_title("Messages Vector", fontsize=12)
+  
 
         # ---- Raw Message Output ----
         ax = fig.add_subplot(gs[3, 2])
