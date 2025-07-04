@@ -43,7 +43,7 @@ class Scenarios(gym.Wrapper):
         self.evaluation_scenario = scenario_index
         
     def _sample_scenario_index(self):
-        agent_count = 4 
+        agent_count = 2
         
         # Extract possible scenario IDs for the current agent count
         scenario_ids = scenarios_per_number_of_agents[agent_count]

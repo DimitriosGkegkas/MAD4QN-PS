@@ -112,12 +112,6 @@ class Agent:
             hidden_dim=config.communication_hidden_dim
         ).to(self.device)
 
-        self.message_decoder = MessageDecoder(
-            message_dim=self.message_dim,
-            output_dim=encoder_input_dim,
-            hidden_dim=config.communication_hidden_dim[::-1]  # Reverse the hidden dimensions for decoder
-        ).to(self.device)
-
 
         # === Optimizers ===
         self.critic_optim = Adam(
@@ -127,7 +121,7 @@ class Agent:
         )
         self.policy_optim = Adam(
             list(self.policy.parameters()) + 
-            list(self.message_encoder.parameters()) + list(self.message_decoder.parameters()), 
+            list(self.message_encoder.parameters()),
             lr=self.lr,  
             betas=(0.9, 0.999),
             )
@@ -598,8 +592,6 @@ class Agent:
             'critic_state_dict': self.critic.state_dict(),
             'critic_target_state_dict': self.critic_target.state_dict(),
             'message_encoder_state_dict': self.message_encoder.state_dict(),
-            'message_decoder_state_dict': self.message_decoder.state_dict(),
-
             # === Optimizers ===
             'critic_optimizer_state_dict': self.critic_optim.state_dict(),
             'policy_optimizer_state_dict': self.policy_optim.state_dict(),
@@ -639,17 +631,16 @@ class Agent:
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
         self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
-        self.message_decoder.load_state_dict(checkpoint['message_decoder_state_dict'])
 
-        # === Load optimizers ===
-        self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
-        self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
-        # === Override learning rates ===
-        for group in self.critic_optim.param_groups:
-            group["lr"] = self.lr
+        # # === Load optimizers ===
+        # self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
+        # self.policy_optim.load_state_dict(checkpoint['policy_optimizer_state_dict'])
+        # # === Override learning rates ===
+        # for group in self.critic_optim.param_groups:
+        #     group["lr"] = self.lr
 
-        for group in self.policy_optim.param_groups:
-            group["lr"] = self.lr
+        # for group in self.policy_optim.param_groups:
+        #     group["lr"] = self.lr
 
 
 
@@ -663,7 +654,7 @@ class Agent:
         #     self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
-        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder, self.message_decoder]:
+        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder]:
             net.to(self.device)
             net.train()
 
