@@ -5,7 +5,7 @@ from smarts.core.coordinates import Heading
 
 
 class Reward(gym.Wrapper):
-    def __init__(self, env: gym.Env, agent_names=None, gains= {"la": 0.005, "lj": 0.005, "lt": 5.5, "lx": 1, "k": 1, "lat": 1}):
+    def __init__(self, env: gym.Env, agent_names=None, gains= {"la": 0.01, "lj": 0.01, "lt": 5.5, "lx": 2, "k": 1, "lat": 1}):
         """
         Initializes the Reward wrapper.
 
@@ -17,10 +17,10 @@ class Reward(gym.Wrapper):
         super().__init__(env)
         self.agent_names = agent_names or ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
         self.env = env
-        self.la = gains.get("la", 0.005)  # Linear acceleration gain
-        self.lj = gains.get("lj", 0.005)  # Jerk
+        self.la = gains.get("la", 0.01)  # Linear acceleration gain
+        self.lj = gains.get("lj", 0.01)  # Jerk
         self.lt = gains.get("lt", 5.5)     # Time separation gain
-        self.lx = gains.get("lx", 1)     # Lateral error gain
+        self.lx = gains.get("lx", 2)     # Lateral error gain
         self.k = gains.get("k", 5)       # Penalty for not moving
         self.lat = gains.get("lat", 1)  # Lateral error gain
         

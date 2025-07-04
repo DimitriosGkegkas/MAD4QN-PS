@@ -314,3 +314,6 @@ agent.actor_hidden_dim="[128, 128, 64, 32]"
 
 
 mode=envision envision_id=20 agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+mode=eval preload=./best_checkpoint.pth agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]"
