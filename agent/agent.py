@@ -641,7 +641,6 @@ class Agent:
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
         self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
-        self.message_decoder.load_state_dict(checkpoint['message_decoder_state_dict'])
 
         # === Load optimizers ===
         self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])

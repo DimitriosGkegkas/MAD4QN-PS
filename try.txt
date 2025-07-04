@@ -1,0 +1,316 @@
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-1/20250624/best_checkpoint.pth" \
+algorithm_identifier="agent-2" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-2/20250624/checkpoint.pth" \
+algorithm_identifier="agent-2-2" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-2-2/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=64 \
+shared.num_env=5
+
+
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-2-2/20250625/checkpoint.pth" \
+algorithm_identifier="agent-2-3" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-s" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=64 \
+shared.num_env=5
+
+
+scl run ./test.py \
+mode=train \
+preload="./models/agent-3-s-lr/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-m-lr-solo-short-memory" \
+agent.lr=0.0001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+agent.memory_max_size=1000
+
+
+#______________________"agent-4-lr"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-lr" \
+agent.lr=0.01 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+
+#______________________"agent-4-static-alpha"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-static-alpha" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.automatic_entropy_tuning=false \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+#______________________"agent-4-low-entropy"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-low-entropy" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.target_entropy = -1.5 \
+agent.automatic_entropy_tuning=true \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+#______________________"agent-4-high-entropy"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-high-entropy" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.target_entropy=-0.2 \
+agent.automatic_entropy_tuning=true \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+
+
+#______________________"agent-4-static-alpha-old"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-static-alpha-old" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.automatic_entropy_tuning=false \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+#______________________"agent-4-low-entropy-old"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-low-entropy-old" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.target_entropy=-1.5 \
+agent.automatic_entropy_tuning=true \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+#______________________"agent-4-high-entropy-old"_____________________________________________
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-high-entropy-old" \
+agent.lr=0.001 \
+agent.alpha=0.4 \
+agent.target_entropy=-0.2 \
+agent.automatic_entropy_tuning=true \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=5
+
+
+
+
+
+scl run ./test.py \
+mode.envision_id=20 preload=best_checkpoint.pth agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-env" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=64 \
+shared.num_env=1
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4/20250625/best_checkpoint.pth" \
+algorithm_identifier="agent-4-slow" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=64 \
+shared.num_env=5 \
+agent.tau=0.01 \
+agent.actor_update_frequency=4
+
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-4-train/20250626/best_checkpoint.pth" \
+algorithm_identifier="agent-4-train-3" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+agent.tau=0.01 \
+shared.num_env=5
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+algorithm_identifier="agent-correct-size-5" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+agent.tau=0.01 \
+shared.num_env=5 \
+trainer.max_training_steps=500 \
+agent.input_dim="[12, 128, 128]"
+
+
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+algorithm_identifier="agent-no-decay-1" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+agent.batch_size=128 \
+shared.num_env=1 \
+trainer.max_training_steps=300 
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=eval \
+preload="./best_checkpoint.pth" \
+algorithm_identifier="Ours" \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" 
+
+
+
+scl run ./test.py \
+mode=envision \
+preload="./best_checkpoint_agent_4.pth" \
+algorithm_identifier="Ours" \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" 
+mode.envision_id=200
+
+mode=envision preload="./best_checkpoint_agent_4.pth" algorithm_identifier="Ours" agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]" mode.envision_id=200
+
+mode=envision preload="./best_checkpoint.pth" algorithm_identifier="Ours" agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]" mode.envision_id=200
+
+
+
+
+scl run ./test.py \
+mode=eval \
+preload="./best_checkpoint.pth" \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]" \
+
+
+mode.envision_id=14 mode=envision  preload="./best_checkpoint.pth" agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+source ../../SMARTS/.SMARTS-env/bin/activate
+scl run ./test.py \
+mode=train \
+preload="./models/agent-2/20250624/checkpoint.pth" \
+algorithm_identifier="agent-2" \
+agent.lr=0.001 \
+agent.communication_hidden_dim="[64, 32, 16]" \
+agent.critic_hidden_dim="[128, 128, 64, 32]" \
+agent.actor_hidden_dim="[128, 128, 64, 32]"
+
+
+mode=envision envision_id=20 agent.communication_hidden_dim="[64, 32, 16]" agent.critic_hidden_dim="[128, 128, 64, 32]" agent.actor_hidden_dim="[128, 128, 64, 32]"
