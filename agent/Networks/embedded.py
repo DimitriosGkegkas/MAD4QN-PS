@@ -18,11 +18,11 @@ class EmbeddedNetwork(nn.Module):
         self.network = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=5, stride=2, padding=2),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(p=dropout_p),
+            # nn.Dropout2d(p=dropout_p),
 
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(p=dropout_p),
+            # nn.Dropout2d(p=dropout_p),
 
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
             nn.ReLU(inplace=True),
@@ -38,9 +38,9 @@ class EmbeddedNetwork(nn.Module):
             nn.Linear(flat_dim, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout_p),
-            nn.LayerNorm(256, elementwise_affine=False),
+            # nn.LayerNorm(256, elementwise_affine=False),
             nn.Linear(256, feature_dim),
-            nn.LayerNorm(feature_dim, elementwise_affine=False)
+            # nn.LayerNorm(feature_dim, elementwise_affine=False)
         )
 
     def forward(self, x):

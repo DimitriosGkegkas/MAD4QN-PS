@@ -13,7 +13,7 @@ from torch.optim import Adam
 from zmq import device
 from .utils import soft_update, hard_update
 # from train.BaseTrainer import BaseTrainer
-from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder, MessageDecoder
+from .Networks import ActorNetwork, CriticNetwork, EmbeddedNetwork, MessageEncoder
 import numpy as np
 import re
 
@@ -106,11 +106,13 @@ class Agent:
         ).to(self.device)
         
 
-        self.message_encoder = MessageEncoder(
-            input_dim=encoder_input_dim,
-            message_dim=self.message_dim,
-            hidden_dim=config.communication_hidden_dim
-        ).to(self.device)
+        # self.message_encoder = MessageEncoder(
+        #     input_dim=encoder_input_dim,
+        #     message_dim=self.message_dim,
+        #     hidden_dim=config.communication_hidden_dim
+        # ).to(self.device)
+        
+        self.message_encoder = lambda x: x  # Identity function for now, can be replaced with a real encoder if needed
 
 
         # === Optimizers ===
@@ -120,8 +122,8 @@ class Agent:
             betas=(0.9, 0.999)
         )
         self.policy_optim = Adam(
-            list(self.policy.parameters()) + 
-            list(self.message_encoder.parameters()),
+            list(self.policy.parameters()),
+            # list(self.message_encoder.parameters()),
             lr=self.lr,  
             betas=(0.9, 0.999),
             )
@@ -459,11 +461,11 @@ class Agent:
             else:
                 action_dim = dist.loc.shape[-1]
                 z = self.get_agent_noise(agent, action_dim).to(dist.loc.device)
-                action = dist.sample(z=z)
+                action = dist.rsample(z=z)
 
             action = action.clamp(-1 , 1)
             # === Prepare message input ===
-            raw_message_input = torch.cat([embedded_state, direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
+            raw_message_input = torch.cat([direction_tensor, action], dim=-1)  # shape: [1, D + D_dir]
             message = self.message_encoder(raw_message_input)
             
             # print(agent)
@@ -593,7 +595,7 @@ class Agent:
             'policy_state_dict': self.policy.state_dict(),
             'critic_state_dict': self.critic.state_dict(),
             'critic_target_state_dict': self.critic_target.state_dict(),
-            'message_encoder_state_dict': self.message_encoder.state_dict(),
+            # 'message_encoder_state_dict': self.message_encoder.state_dict(),
             # === Optimizers ===
             'critic_optimizer_state_dict': self.critic_optim.state_dict(),
             'policy_optimizer_state_dict': self.policy_optim.state_dict(),
@@ -632,7 +634,7 @@ class Agent:
         self.policy.load_state_dict(checkpoint['policy_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
-        self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
+        # self.message_encoder.load_state_dict(checkpoint['message_encoder_state_dict'])
 
         # # === Load optimizers ===
         # self.critic_optim.load_state_dict(checkpoint['critic_optimizer_state_dict'])
@@ -656,7 +658,7 @@ class Agent:
         #     self.log_alpha.requires_grad = True
 
         # === Apply device & mode ===
-        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target, self.message_encoder]:
+        for net in [self.embedded, self.embedded_target, self.policy, self.critic, self.critic_target]:
             net.to(self.device)
             net.train()
 

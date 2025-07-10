@@ -22,11 +22,11 @@ def make_env(
     scenario_path, 
     headless, 
     seed, 
-    num_env=10, 
-    stack_frames = 4,  
-    observation_shape=(32, 32, 3), 
-    message_dim=8, 
-    message_raw_dim=8, 
+    num_env, 
+    stack_frames,  
+    observation_shape, 
+    message_dim, 
+    message_raw_dim, 
     dynamic_scenarios = False, 
     traffic_base_path=None
     ) -> gym.Env:
@@ -71,3 +71,5 @@ def make_env(
 
 
     return env
+
+

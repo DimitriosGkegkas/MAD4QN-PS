@@ -105,8 +105,14 @@ class ActorNetwork(nn.Module):
     ):
         super(ActorNetwork, self).__init__()
         self.device = device
+        
+        self.aggregator = MessageAggregator(
+            message_dim=message_dim,
+            max_msgs=4,
+            device=self.device
+        )
 
-        in_dim = feature_dim + direction_dim + message_dim
+        in_dim = feature_dim + direction_dim + self.aggregator.output_size
         layers = []
 
         for i, h_dim in enumerate(hidden_dim):
@@ -119,13 +125,6 @@ class ActorNetwork(nn.Module):
 
         self.mean_linear = nn.Linear(in_dim, action_dim)
         self.log_std_linear = nn.Linear(in_dim, action_dim)
-        self.aggregator = MessageAggregator(
-            message_dim=message_dim,
-            device=self.device,
-            max_msgs=4,
-            aggregation_type="mean"
-        )
-
         self.apply(utils.weight_init)
 
     def forward(self, embedded: torch.Tensor, direction: torch.Tensor, messages: List[torch.Tensor]):

@@ -81,7 +81,7 @@ class Evaluator:
                         scenario_scores[agent_id] = 0.0
                     
                     scenario_scores[agent_id] += r
-                    if r < -50:
+                    if r < -19:
                         crashed[scenario_idx] = True
 
 

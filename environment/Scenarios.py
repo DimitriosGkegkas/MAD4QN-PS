@@ -43,7 +43,7 @@ class Scenarios(gym.Wrapper):
         self.evaluation_scenario = scenario_index
         
     def _sample_scenario_index(self):
-        agent_count = 3
+        agent_count = 4
         
         # Extract possible scenario IDs for the current agent count
         scenario_ids = scenarios_per_number_of_agents[agent_count]
@@ -66,7 +66,7 @@ class Scenarios(gym.Wrapper):
         else:
             missions = {
                 self.agent_names[i]: mission for i, mission in enumerate(
-                    get_scenario_missions(self._sample_scenario_index())
+                    get_scenario_missions(self._sample_scenario_index(), randomize_start_time=True)
                 )
             }
 

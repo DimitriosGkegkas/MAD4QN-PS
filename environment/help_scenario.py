@@ -3,7 +3,7 @@ from typing import Any, Dict
 from smarts.core.coordinates import Point, Heading
 import numpy as np
 
-def get_scenario_missions(scenario_id: int) -> Any:
+def get_scenario_missions(scenario_id: int, randomize_start_time = False) -> Any:
     """
     Returns the scenario based on the scenario_id.
     """
@@ -16,7 +16,8 @@ def get_scenario_missions(scenario_id: int) -> Any:
         NavigationMission(
             start=starting_points[trip[0]],
             goal=goal_points[trip[1]],
-        ) for trip in scenario
+            start_time=index * np.random.uniform(0, 2) if randomize_start_time else 0.0,
+        ) for index, trip in enumerate(scenario)
     ]
     
     return missions

@@ -59,8 +59,8 @@ class EnvironmentManager:
             seed=cfg.seed,
             stack_frames=cfg.stack_frames, 
             observation_shape=cfg.observation_shape,
-            message_dim=cfg.message_dim,
-            message_raw_dim=cfg.feature_dim + cfg.action_dim + cfg.direction_dim,
+            message_dim=cfg.action_dim + cfg.direction_dim,
+            message_raw_dim=cfg.action_dim + cfg.direction_dim,
             dynamic_scenarios=cfg.dynamic_scenarios,
             traffic_base_path=traffic_path
         )

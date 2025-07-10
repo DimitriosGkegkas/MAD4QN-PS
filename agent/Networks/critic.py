@@ -14,22 +14,21 @@ class CriticNetwork(nn.Module):
         super(CriticNetwork, self).__init__()
         self.device = device
         
-
+        self.aggregator = MessageAggregator(
+            message_dim=message_dim,
+            max_msgs=4,
+            device=self.device
+        )
+        
         # Input dimension after concatenating state and action
-        critic_input_dim = feature_dim + direction_dim + message_dim + action_dim
+        critic_input_dim = feature_dim + direction_dim + self.aggregator.output_size + action_dim
 
         # Q1 stream
         self.q1 = self._build_stream(critic_input_dim, 1, hidden_dim, dropout_p)
 
         # Q2 stream
         self.q2 = self._build_stream(critic_input_dim, 1, hidden_dim, dropout_p)
-        
-        self.aggregator = MessageAggregator(
-            message_dim=message_dim,
-            max_msgs=4,
-            aggregation_type="mean",
-            device=self.device
-        )
+
 
         self.apply(weights_init_)
 
@@ -39,8 +38,8 @@ class CriticNetwork(nn.Module):
         for hidden_dim in hidden_dim:
             layers.append(nn.Linear(in_dim, hidden_dim))
             layers.append(nn.ReLU())
-            layers.append(nn.LayerNorm(hidden_dim))
-            layers.append(nn.Dropout(p=dropout_p))
+            # layers.append(nn.LayerNorm(hidden_dim))
+            # layers.append(nn.Dropout(p=dropout_p))
             in_dim = hidden_dim
         layers.append(nn.Linear(in_dim, output_dim))
         return nn.Sequential(*layers)

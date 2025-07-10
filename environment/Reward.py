@@ -5,7 +5,7 @@ from smarts.core.coordinates import Heading
 
 
 class Reward(gym.Wrapper):
-    def __init__(self, env: gym.Env, agent_names=None, gains= {"la": 0.01, "lj": 0.01, "lt": 5.5, "lx": 2, "k": 1, "lat": 1}):
+    def __init__(self, env: gym.Env, agent_names=None, gains= {}):
         """
         Initializes the Reward wrapper.
 
@@ -21,7 +21,7 @@ class Reward(gym.Wrapper):
         self.lj = gains.get("lj", 0.01)  # Jerk
         self.lt = gains.get("lt", 5.5)     # Time separation gain
         self.lx = gains.get("lx", 2)     # Lateral error gain
-        self.k = gains.get("k", 5)       # Penalty for not moving
+        self.k = gains.get("k", 2)       # Penalty for not moving
         self.lat = gains.get("lat", 1)  # Lateral error gain
         
 
@@ -83,14 +83,14 @@ class Reward(gym.Wrapper):
                 if obs[agent_name]["events"]["not_moving"] or env_reward[agent_name] < 0.04:
                     reward[agent_name] -= self.k
                 elif obs[agent_name]["events"]["reached_goal"]:
-                    reward[agent_name] += 20 * self.k
+                    reward[agent_name] += 10 * self.k
                 elif obs[agent_name]["events"]["collisions"] \
                     or obs[agent_name]["events"]["off_route"] \
                     or obs[agent_name]["events"]["off_road"] \
                     or obs[agent_name]["events"]["wrong_way"]:
-                    reward[agent_name] -= 20 * self.k
+                    reward[agent_name] -= 10 * self.k
                 else:
-                    reward[agent_name] += self.lx*env_reward[agent_name]*env_reward[agent_name]
+                    reward[agent_name] += self.lx*env_reward[agent_name]
                     
                     reward[agent_name] -= self.lat*get_lateral_error(obs[agent_name])
                     

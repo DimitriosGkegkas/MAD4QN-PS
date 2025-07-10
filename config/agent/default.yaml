@@ -6,7 +6,7 @@ input_dim: [12, 128, 128]
 action_dim: 1
 direction_dim: 4
 feature_dim: 64
-message_dim: 8
+message_dim: 5
 n_agents: 4
 
 tau: 0.005
