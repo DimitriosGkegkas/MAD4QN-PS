@@ -16,18 +16,40 @@ class EmbeddedNetwork(nn.Module):
         in_channels = input_dim[0]
 
         self.network = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=5, stride=2, padding=2),
+            # Layer 1: Initial feature extraction (large receptive field)
+            nn.Conv2d(in_channels, 32, kernel_size=7, stride=2, padding=3),  # larger kernel for coarse features
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            # nn.Dropout2d(p=dropout_p),
+            
+            # Layer 2: Medium-scale features
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            
+            # Layer 3: Multi-scale fusion with parallel convs (Inception-style)
+            nn.Conv2d(64, 32, kernel_size=1, stride=1),  # bottleneck
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
 
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),  # wider kernel
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            # nn.Dropout2d(p=dropout_p),
 
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            # Layer 4: Deeper block
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # downsample
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
+            
+            # Optional regularization
+            nn.Dropout2d(p=0.3),
+
             nn.Flatten()
         )
+
 
         # Dynamically calculate flattened feature size
         with torch.no_grad():
@@ -37,10 +59,7 @@ class EmbeddedNetwork(nn.Module):
         self.projector = nn.Sequential(
             nn.Linear(flat_dim, 256),
             nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout_p),
-            # nn.LayerNorm(256, elementwise_affine=False),
             nn.Linear(256, feature_dim),
-            # nn.LayerNorm(feature_dim, elementwise_affine=False)
         )
 
     def forward(self, x):
