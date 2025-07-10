@@ -67,7 +67,7 @@ class Agent:
             print("Falling back to CPU.")
             self.device = torch.device("cpu")
         # Total raw input: [feature || direction || action]
-        encoder_input_dim = self.feature_dim + self.direction_dim + self.action_dim
+        encoder_input_dim = self.direction_dim + self.action_dim
 
         # Embedding network
         self.embedded = EmbeddedNetwork(input_dim=self.input_dim, feature_dim=self.feature_dim).to(self.device)
