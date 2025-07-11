@@ -44,13 +44,13 @@ class Scenarios(gym.Wrapper):
         
     def _sample_scenario_index(self):
         # choose number of agents based randomly
-        num_agents = random.choice([1, 2, 3, 4], weight=[1, 2, 4, 12])
+        num_agents = random.choices([1, 2, 3, 4], weights=[1, 2, 3, 16])[0]
         
         # Choose a scenario_id using the weights
         if num_agents == 4 :
             scenario_id = random.choices(scenarios_per_number_of_agents[4], weights=self.probs)[0]
         else:
-            scenario_id = random.choice(scenarios_per_number_of_agents[num_agents])[0]
+            scenario_id = random.choice(scenarios_per_number_of_agents[num_agents])
             
         print(f"Scenario ID: {scenario_id} with {num_agents} agents")
         return scenario_id
