@@ -4,6 +4,7 @@ from train.AgentManager import AgentManager
 from train.BaseTrainer import BaseTrainer
 from train.EnvironmentManager import EnvironmentManager
 from train.EpisodeManager import EpisodeManager
+from environment.help_scenario import scenarios_per_number_of_agents
 
 class Evaluator:
     def __init__(
@@ -24,7 +25,7 @@ class Evaluator:
         self.evaluation_step = evaluation_step
         self.checkpoint_enabled = checkpoint_enabled
         self.best_score = -np.inf
-        self.eval_scenarios = eval_scenarios
+        self.eval_scenarios = scenarios_per_number_of_agents[4]
         self.max_evaluation_steps = max_evaluation_steps
         self.evaluate_step = 0
 
@@ -51,6 +52,14 @@ class Evaluator:
         self.evaluate_step += 1
 
         mean_score = float(np.mean(rewards_all))
+        
+        # if crashed make the score zero and the rest clip them to zero
+        clipped_scores = [max(0.0, score) if not crashed else 0.0 for score, crashed in zip(rewards_all, crashed_all)]
+        clipped_scores = clipped_scores / np.max(clipped_scores)
+        clipped_scores = 1 - clipped_scores  # Invert the scores to make higher scores better
+        clipped_scores = 1 + 9 * clipped_scores  # Scale to [1, 10] range
+        
+        self.env_manager.env.modify_probs(clipped_scores)
 
         if self.checkpoint_enabled and mean_score > self.best_score:
             self.agent_manager.save()

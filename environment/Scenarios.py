@@ -23,9 +23,9 @@ class Scenarios(gym.Wrapper):
         super().__init__(env)
         self.evaluation_scenario = -1
         self.agent_names = agent_names
-        self.n_episodes = 0
         self.dynamic_scenarios = dynamic_scenarios
         self.scenario_path = str(scenario_path[0])
+        self.probs = np.ones(len(scenarios_per_number_of_agents[4]))
         
         if traffic_base_path is not None:
             self.traffic_path = [
@@ -36,22 +36,23 @@ class Scenarios(gym.Wrapper):
         
 
      
-    def modify_probs(self, n_episodes):
-        self.n_episodes = n_episodes
+    def modify_probs(self, probs):
+        self.probs = probs
 
     def set_scenario(self, scenario_index):
         self.evaluation_scenario = scenario_index
         
     def _sample_scenario_index(self):
-        agent_count = 4
+        # choose number of agents based randomly
+        num_agents = random.choice([1, 2, 3, 4], weight=[1, 2, 4, 12])
         
-        # Extract possible scenario IDs for the current agent count
-        scenario_ids = scenarios_per_number_of_agents[agent_count]
-        weights = scenario_weights_per_number_of_agents[agent_count]
-
         # Choose a scenario_id using the weights
-        scenario_id = random.choices(scenario_ids, weights=weights, k=1)[0]
-        print(f"Scenario {scenario_id} selected for episode {self.n_episodes}")
+        if num_agents == 4 :
+            scenario_id = random.choices(scenarios_per_number_of_agents[4], weights=self.probs)[0]
+        else:
+            scenario_id = random.choice(scenarios_per_number_of_agents[num_agents])[0]
+            
+        print(f"Scenario ID: {scenario_id} with {num_agents} agents")
         return scenario_id
     
     
