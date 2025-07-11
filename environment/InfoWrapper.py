@@ -41,7 +41,7 @@ class InfoWrapper(gym.Wrapper):
         time_separation_dict = compute_all_time_separations(info, window=1.0)
         for agent_name, tsep in time_separation_dict.items():
             if agent_name in info:
-                info[agent_name]['time_separation'] = np.exp(-2 * tsep)
+                info[agent_name]['time_separation'] = np.exp(-0.5 * tsep)
         return info
         
     
@@ -169,7 +169,7 @@ def time_separation(agent1, agent2, window=6.0, tol=0.5):
 
     
     
-def compute_all_time_separations(info: dict, window=6.0, tol=0.5) -> dict:
+def compute_all_time_separations(info: dict, window=6.0, tol=1) -> dict:
     from collections import defaultdict
     time_separations = defaultdict(lambda: np.inf)
 
