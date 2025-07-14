@@ -17,9 +17,9 @@ class Reward(gym.Wrapper):
         super().__init__(env)
         self.agent_names = agent_names or ['Agent-0', 'Agent-1', 'Agent-2', 'Agent-3']
         self.env = env
-        self.la = gains.get("la", 0.01)  # Linear acceleration gain
-        self.lj = gains.get("lj", 0.01)  # Jerk
-        self.lt = gains.get("lt", 5.5)     # Time separation gain
+        self.la = gains.get("la", 0.05)  # Linear acceleration gain
+        self.lj = gains.get("lj", 0.03)  # Jerk
+        self.lt = gains.get("lt", 10)     # Time separation gain
         self.lx = gains.get("lx", 2)     # Lateral error gain
         self.k = gains.get("k", 2)       # Penalty for not moving
         self.lat = gains.get("lat", 1)  # Lateral error gain
@@ -88,7 +88,7 @@ class Reward(gym.Wrapper):
                     or obs[agent_name]["events"]["off_route"] \
                     or obs[agent_name]["events"]["off_road"] \
                     or obs[agent_name]["events"]["wrong_way"]:
-                    reward[agent_name] -= 10 * self.k
+                    reward[agent_name] -= 12 * self.k
                 else:
                     reward[agent_name] += self.lx*env_reward[agent_name]
                     

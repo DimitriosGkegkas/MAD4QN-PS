@@ -127,10 +127,9 @@ class Agent:
             lr=self.lr,  
             betas=(0.9, 0.999),
             )
-
+        self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
         # === Entropy tuning ===
         if self.automatic_entropy_tuning:
-            self.log_alpha = torch.tensor(np.log(self.init_alpha)).to(self.device)
             self.log_alpha.requires_grad = True
             # set target entropy to -|A|
             self.target_entropy = config.target_entropy

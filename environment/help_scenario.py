@@ -16,7 +16,9 @@ def get_scenario_missions(scenario_id: int, randomize_start_time = False) -> Any
         NavigationMission(
             start=starting_points[trip[0]],
             goal=goal_points[trip[1]],
-            start_time=index * np.random.uniform(0, 2) if randomize_start_time else 0.0,
+            # start_time=index * np.random.uniform(0, 2) if randomize_start_time else 0.0,
+            start_time=index * max(np.random.uniform(-1, 1), 0) if randomize_start_time else 0.0,
+            
         ) for index, trip in enumerate(scenario)
     ]
     
