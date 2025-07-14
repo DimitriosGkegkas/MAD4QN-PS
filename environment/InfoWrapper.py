@@ -41,7 +41,7 @@ class InfoWrapper(gym.Wrapper):
         time_separation_dict = compute_all_time_separations(info, window=1.0)
         for agent_name, tsep in time_separation_dict.items():
             if agent_name in info:
-                info[agent_name]['time_separation'] = np.exp(-2 * tsep)
+                info[agent_name]['time_separation'] = np.exp(-0.5 * tsep)
         return info
         
     
@@ -77,7 +77,29 @@ def find_path_intersection(path1, path2, tol=0.5):
                 d2 = np.linalg.norm(q2 - q1)
                 if np.linalg.norm(intersection - p1) <= d1 + tol and np.linalg.norm(intersection - q1) <= d2 + tol:
                     return intersection.tolist()
+            else:
+                # Check for coincident segments
+                if are_colinear(p1, p2, q1, q2):
+                    # Return first shared point (either q1 or q2 if on segment p1-p2)
+                    if point_on_segment(q1, p1, p2, tol):
+                        return q1.tolist()
+                    elif point_on_segment(q2, p1, p2, tol):
+                        return q2.tolist()
     return None
+
+def are_colinear(a1, a2, b1, b2, eps=1e-8):
+    # Check if two segments are colinear using cross product
+    v1 = a2 - a1
+    v2 = b1 - a1
+    v3 = b2 - a1
+    return np.abs(np.cross(v1, v2)) < eps and np.abs(np.cross(v1, v3)) < eps
+
+def point_on_segment(p, a, b, tol=1e-8):
+    # Check if point p lies on segment ab
+    ap = p - a
+    ab = b - a
+    proj = np.dot(ap, ab) / np.dot(ab, ab)
+    return 0 - tol <= proj <= 1 + tol and np.linalg.norm(np.cross(ap, ab)) / np.linalg.norm(ab) < tol
 
 def distance_along_path_to_point(position, waypoints, target_point, tol=0.5):
     """
@@ -169,7 +191,7 @@ def time_separation(agent1, agent2, window=6.0, tol=0.5):
 
     
     
-def compute_all_time_separations(info: dict, window=6.0, tol=0.5) -> dict:
+def compute_all_time_separations(info: dict, window=6.0, tol=1) -> dict:
     from collections import defaultdict
     time_separations = defaultdict(lambda: np.inf)
 

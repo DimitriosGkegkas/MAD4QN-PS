@@ -317,7 +317,7 @@ all_scenarios_to_number_of_agents = [
 ]
 
 scenarios_per_number_of_agents = {
-    i: [j for j, scenario in enumerate(all_scenarios) if len(scenario) <= i]
+    i: [j for j, scenario in enumerate(all_scenarios) if len(scenario) == i]
     for i in range(1, 1+ max(all_scenarios_to_number_of_agents)) 
 }
 

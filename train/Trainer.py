@@ -71,7 +71,6 @@ class Trainer:
         )
 
         self.n_episodes += 1
-        self.env_manager.env.modify_probs(self.n_episodes)
         
         if self.evaluator.should_evaluate(self.n_episodes):
             self.evaluator.evaluate(self.n_episodes, self.n_steps)

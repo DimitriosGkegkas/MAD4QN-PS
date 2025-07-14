@@ -2,7 +2,7 @@ evaluate: false
 tensorboard: true
 envision: false
 seed: 42
-num_env: 2
+num_env: 9
 eval_scenarios: [
                   # Length 1 (4)
                   0,  1,  2,  3 , 4, 
