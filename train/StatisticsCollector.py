@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Union
 import numpy as np
 from evaluation.experiment_data_collector import ExperimentDataCollector
 from train import AgentManager, EnvironmentManager, EpisodeManager, BaseTrainer
+from environment.help_scenario import scenarios_per_number_of_agents
 
 class StatisticsCollector:
     def __init__(self,
@@ -19,7 +20,7 @@ class StatisticsCollector:
         self.env_manager = env_manager
         self.max_evaluation_steps = max_evaluation_steps
         self.best_score = -np.inf
-        self.eval_scenarios = eval_scenarios
+        self.eval_scenarios =  scenarios_per_number_of_agents[4]
         self.collector = ExperimentDataCollector(algorithm_identifier)
 
     def evaluate(self) -> None:
